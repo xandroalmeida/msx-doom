@@ -419,8 +419,8 @@ def generate():
           for index, (_, name, icon) in enumerate(markers)),
         (15, 2, marker_row("CURA", heart_full)),
     ])
-    menu_hud = label(" ESQ LEGENDA DIR MAPA M VOLTAR ".ljust(32), 15)
-    map_hud = label(" ESQ LEGENDA  SUBIR DESCER  M".ljust(32), 15)
+    menu_hud = label(" ESQ MAPA             M VOLTAR".ljust(32), 15)
+    map_hud = label(" DIR LEGENDA  SUBIR DESCER  M".ljust(32), 15)
 
     def story_panel(field, title, detail, action, accent=7):
         return panel(field, [

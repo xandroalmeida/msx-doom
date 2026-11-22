@@ -5,18 +5,17 @@ toggle_menu:
     ld (shot_repeat),a
     ld a,(menu_state)
     or a
+    jr z,select_map
     ld a,0
-    jr nz,select_menu
-    inc a
 select_menu:
     ld (menu_state),a
     jp mark_dirty
 
 menu_tick:
     call read_direction
-    cp 3                          ; right: map
+    cp 7                          ; left: map
     jr z,select_map
-    cp 7                          ; left: legend
+    cp 3                          ; right: legend
     jr nz,scroll_map
     ld a,1
     jr change_tab

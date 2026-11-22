@@ -31,7 +31,7 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Abrir a porta | Shift | Botão B |
 | Abrir ou fechar o menu de pausa | M | A + B |
 | Mostrar ou ocultar o minimapa durante a partida | N | B + baixo |
-| Alternar entre legenda e mapa | ← / → | Esquerda / direita |
+| Alternar entre mapa e legenda | ← / → | Esquerda / direita |
 | Rolar o mapa de pausa | ↑ / ↓ | Cima / baixo |
 | Reiniciar o setor durante a partida | R | — |
 
@@ -55,7 +55,7 @@ A visão 3D ocupa 256 × 184 pixels. A última linha concentra os corações, a 
 
 O minimapa no canto superior direito acompanha o jogador em tempo real. Mostra apenas o terreno, o estado das passagens e a seta da sua posição e direção. **N** alterna a exibição durante a partida. A preferência vale até desligar ou recarregar o cartucho.
 
-**M** pausa na legenda. **→** abre o mapa na altura do jogador, **↑/↓** mostram outras áreas, **←** volta à legenda e **M** retoma a partida. A seta branca indica a posição e a direção do jogador. O mapa mostra portões abertos e fechados, inimigos, munição, cura, chaves e a saída.
+**M** pausa e abre o mapa na altura do jogador. **↑/↓** rolam o mapa, **→** abre a legenda, **←** volta ao mapa e **M** retoma a partida. A seta branca indica a posição e a direção do jogador. O mapa mostra portões abertos e fechados, inimigos, munição, cura, chaves e a saída.
 
 Os símbolos da legenda e do mapa são gerados com os tiles da fase a partir de `TERRAIN` e `OBJECT_ART`. Ao mudar ou adicionar um tipo de terreno ou objeto visível, atualize esses registros e o teste. Para um novo objeto dinâmico, atualize também o desenho de marcadores no menu.
 

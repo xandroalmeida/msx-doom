@@ -642,19 +642,9 @@ function checkDifficulty(frequency) {
 
 function checkMenu(demo, frequency) {
     press(demo, "menu", true);
-    assert.equal(demo.read(state.menu), 1);
-    const legend = demo.currentView();
-    for (const [index, tile] of terrain.entries()) assert.equal(legend[(5 + 2 * index) * 32 + 2], tile);
-    for (const [index, tile] of [playerArrows[0], ...visibleObjects].entries()) {
-        assert.equal(legend[(5 + 2 * index) * 32 + 20], tile);
-    }
-    assert.equal(legend[15 * 32 + 2], heartFull);
+    assert.equal(demo.read(state.menu), 2, "A pausa deve abrir no mapa.");
     assert.equal(demo.video().vram[0x1b00], 208);
-    if (frequency === 60 && legendPath) saveFrame(demo.frame, legendPath);
-
     const frozen = demo.xy();
-    press(demo, "stick", 0x08);
-    assert.equal(demo.read(state.menu), 2);
     checkPlayerMarker(demo);
     const origin = demo.read(state.mapTop);
     press(demo, "keys", up);
@@ -663,8 +653,20 @@ function checkMenu(demo, frequency) {
     press(demo, "keys", down);
     assert.equal(demo.read(state.mapTop), origin);
     if (frequency === 60 && mapPath) saveFrame(demo.frame, mapPath);
-    press(demo, "keys", 0x10);
+
+    press(demo, "stick", 0x08);
     assert.equal(demo.read(state.menu), 1);
+    const legend = demo.currentView();
+    for (const [index, tile] of terrain.entries()) assert.equal(legend[(5 + 2 * index) * 32 + 2], tile);
+    for (const [index, tile] of [playerArrows[0], ...visibleObjects].entries()) {
+        assert.equal(legend[(5 + 2 * index) * 32 + 20], tile);
+    }
+    assert.equal(legend[15 * 32 + 2], heartFull);
+    if (frequency === 60 && legendPath) saveFrame(demo.frame, legendPath);
+
+    press(demo, "keys", 0x10);
+    assert.equal(demo.read(state.menu), 2);
+    checkPlayerMarker(demo);
     press(demo, "stick", 0x30);
     assert.equal(demo.read(state.menu), 0);
     assert.equal(demo.read(state.ammo), 8, "Abrir ou fechar o menu não deve disparar.");
@@ -706,7 +708,6 @@ function checkMinimap(frequency) {
     syncView();
     checkTerrain(0);
     press(demo, "menu", true);
-    press(demo, "keys", right);
     assert.equal(mapTile(demo, 7, 11), visibleObjects[0]);
     assert.equal(mapTile(demo, 6, 12), visibleObjects[1]);
     assert.equal(mapTile(demo, 6, 13), visibleObjects[4]);
@@ -940,7 +941,6 @@ function playCampaign(frequency) {
             walkRoute(demo, gates[i], true);
             if (i === 1) {
                 press(demo, "menu", true);
-                press(demo, "keys", right);
                 checkPlayerMarker(demo);
                 press(demo, "menu", true);
             }
