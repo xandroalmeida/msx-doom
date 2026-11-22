@@ -393,6 +393,24 @@ function checkSlopedWall(frequency, material) {
     }
     assert.ok(observed.has(0xe0) && observed.has(0x03), "A parede deve suavizar inclinações nos dois sentidos.");
 
+    placePlayer(demo, 8, 11);
+    press(demo, "menu", true);
+    press(demo, "menu", true);
+    const depth = demo.read(state.wallDepth + 16);
+    assert.equal(sizes[heights[depth]], 18, "A parede distante deve ter 36 pixels de altura.");
+
+    placePlayer(demo, 8, 8);
+    demo.write(state.playerY, 192);
+    press(demo, "menu", true);
+    press(demo, "menu", true);
+    const extendedWall = demo.currentView()[16];
+    for (const row of [2, 3, 20, 21]) {
+        assert.equal(demo.read(frameStart + row * width + 16), extendedWall);
+    }
+    for (const row of [1, 22]) {
+        assert.notEqual(demo.read(frameStart + row * width + 16), extendedWall);
+    }
+
     placePlayer(demo, 8, 8);
     demo.write(state.playerY, 64);
     press(demo, "menu", true);

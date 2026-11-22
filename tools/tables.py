@@ -6,6 +6,7 @@ from math import cos, pi, sin
 from levels import HEIGHT, sector_data
 
 RAY_LIMIT = 224
+WALL_PROJECTION = 460
 MAX_LIFE = 5
 TERRAIN = (
     (".", "CHAO LIVRE", None),
@@ -308,7 +309,10 @@ def generate():
     terrain_tiles = [floor_tile]
 
     # Two-pixel height increments bound the number of wall cap profiles.
-    heights = [min(64, 2 * round(355 / (2 * n))) for n in range(1, RAY_LIMIT + 2)]
+    projected_heights = [min(96, 2 * round(WALL_PROJECTION / (2 * n))) for n in range(1, RAY_LIMIT + 2)]
+    heights = [min(64, height) for height in projected_heights]
+    # Outside the central band, round to the nearest complete tile row.
+    extension_rows = [(height - 64 + 4) // 8 for height in projected_heights if height >= 68]
     wall_heights = sorted(set(heights))
     style_offsets = [32 + i * 16 for i in (0, 0, 1, 2, 0, 3, 4, 2)]
     templates = []
@@ -512,6 +516,8 @@ def generate():
         # The aligned terrain lookup and this depth lookup share a ROM page.
         data("heights", (wall_heights.index(height) for height in heights)),
         *caps,
+        f"wall_extension_count: equ {len(extension_rows)}",
+        data("wall_extensions", extension_rows),
         *(data(f"{kind}_tiles", art) for kind, _, art in objects),
         data("object_depths", (distance * 4 // 9 for distance in range(182))),
         data("object_offsets", (0, 1, 5, 14)),

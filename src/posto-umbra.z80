@@ -840,27 +840,29 @@ extend_wall:
     ld l,a
     ld h,wall_depth/256
     ld a,(hl)
-    cp 5
+    cp wall_extension_count
     ret nc
+    ld c,a
+    ld b,0
+    ld hl,wall_extensions
+    add hl,bc
+    ld b,(hl)
     ld l,e
     ld h,view/256
     ld c,(hl)
-    ld b,3
+    ld a,b
     cp 4
-    jr nz,extend_top
-    ld b,1
-extend_top:
-    push bc
-    cp 3
-    jr nc,extend_up
-    inc b
+    jr c,extend_up
+    dec a                        ; the HUD leaves three rows below the center band
 extend_up:
+    push af
     ld de,-32
 extend_up_one:
     add hl,de
     ld (hl),c
     djnz extend_up_one
-    pop bc
+    pop af
+    ld b,a
     ld a,(column)
     ld l,a
     ld h,(view+16*32)/256
