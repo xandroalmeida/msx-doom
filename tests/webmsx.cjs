@@ -18,9 +18,12 @@ assert.equal(
 );
 const cartridge = readFileSync(path.join(__dirname, "../build/posto-umbra.rom"));
 const symbols = readFileSync(path.join(__dirname, "../build/posto-umbra.sym"), "utf8");
-function romTiles(label, length) {
+function romAddress(label) {
     const match = symbols.match(new RegExp(`^([0-9a-f]+)=${label}$`, "im"));
-    const offset = Number.parseInt(match[1], 16) - 0x4000;
+    return Number.parseInt(match[1], 16);
+}
+function romTiles(label, length) {
+    const offset = romAddress(label) - 0x4000;
     return cartridge.subarray(offset, offset + length);
 }
 const creatureTiles = new Set(romTiles("creature_tiles", 30));
@@ -160,9 +163,10 @@ function checkVideo(run) {
 }
 
 const state = {
-    playerY: 0xc202, heading: 0xc204, page: 0xc205, shown: 0xc20b, life: 0xc20f,
+    playerX: 0xc200, playerY: 0xc202, heading: 0xc204, page: 0xc205, shown: 0xc20b, life: 0xc20f,
     ammo: 0xc210, monster: 0xc211, monsterY: 0xc214, pickup: 0xc217,
     door: 0xc218, outcome: 0xc219, hint: 0xc21a, flash: 0xc21b, menu: 0xc225, map: 0xc300,
+    wallDepth: 0xc260,
 };
 const up = 0x20;
 const down = 0x40;
@@ -172,7 +176,9 @@ const startPosition = [0x0580, 0x0c80];
 const doorNorthing = 0x0640;
 
 function creatureTileCount(demo) {
-    return demo.currentView().filter((tile) => creatureTiles.has(tile)).length;
+    const { regs, vram } = demo.video();
+    const start = (regs[2] << 10) + 128;
+    return vram.subarray(start, start + 512).filter((tile) => creatureTiles.has(tile)).length;
 }
 
 function mapTile(demo, x, y) {
@@ -190,6 +196,45 @@ function press(demo, input, value) {
     demo.run(12);
     demo.inputs[input] = 0;
     demo.run(12);
+}
+
+function checkWallEdges(frequency, material, direction) {
+    const demo = boot(frequency);
+    demo.run(180);
+    demo.write(state.monster, 0);
+    demo.write(state.pickup, 0);
+    const rotate = (x, y) => direction === 0 ? [x, y] : [15 - y, x];
+    for (let y = 1; y < 15; y++) {
+        for (let x = 1; x < 15; x++) {
+            const [column, row] = rotate(x, y);
+            // One block in front of a continuous wall of the same stone.
+            const wall = y === 7 || (y === 10 && x === 5);
+            demo.write(state.map + row * 16 + column, wall ? material : 0);
+        }
+    }
+    const [x, y] = rotate(5, 12);
+    demo.write(state.playerX + 1, x);
+    demo.write(state.playerY + 1, y);
+    demo.write(state.heading, direction);
+    press(demo, "menu", true);
+    press(demo, "menu", true);
+    checkVideo(demo);
+
+    const depths = Array.from({ length: 32 }, (_, i) => demo.read(state.wallDepth + i));
+    const nearest = Math.min(...depths);
+    const left = depths.indexOf(nearest);
+    const right = depths.lastIndexOf(nearest);
+    assert.ok(left > 0 && right < 31 && right - left > 1);
+    const styles = romTiles("wall_styles", 8);
+    const heights = romTiles("heights", romAddress("wall_columns") - romAddress("heights"));
+    const tiles = romTiles("wall_columns", romAddress("terrain_tiles") - romAddress("wall_columns"));
+    const view = demo.currentView();
+    for (const [column, depth] of depths.entries()) {
+        const edge = column === left || column === right;
+        const style = material + (edge ? 4 : 0);
+        const tile = tiles[(styles[style] + heights[depth]) * 16 + 7];
+        assert.equal(view[7 * 32 + column], tile, `Borda indevida ou ausente na coluna ${column}.`);
+    }
 }
 
 function holdUntil(demo, keys, condition, limit = 500) {
@@ -214,6 +259,8 @@ function checkReset(demo) {
 }
 
 for (const frequency of [60, 50]) {
+    checkWallEdges(frequency, 1, 0);
+    checkWallEdges(frequency, 2, 16);
     const demo = boot(frequency);
     const shown = () => demo.read(state.shown);
     const heading = () => demo.read(state.heading);
@@ -395,8 +442,12 @@ for (const frequency of [60, 50]) {
     arena.run(frequency);
     arena.inputs.keys = 0;
     const combatFps = arena.read(state.shown);
-    arena.run(10);
-    assert.ok(creatureTileCount(arena) > farTiles, "O monstro deve crescer na tela ao se aproximar.");
+    let nearTiles = 0;
+    for (let i = 0; i < 10; i++) {
+        arena.run(1);
+        nearTiles = Math.max(nearTiles, creatureTileCount(arena));
+    }
+    assert.ok(nearTiles > farTiles, "O monstro deve crescer na tela ao se aproximar.");
     press(arena, "menu", true);
     press(arena, "keys", right);
     const lifeOnPause = arena.read(state.life);

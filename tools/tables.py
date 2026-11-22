@@ -26,10 +26,48 @@ MONSTER = (5, 8)
 AMMO = (5, 11)
 TERRAIN = (
     (".", "CHAO LIVRE", None),
-    ("#", "PAREDE AZUL", (7, 4, 5)),
-    ("+", "PAREDE AMARELA", (11, 6, 10)),
-    ("D", "PORTA FECHADA", (13, 4, 15)),
+    ("#", "PAREDE AZUL", (4, 5, 7, 1)),
+    ("+", "PAREDE AMARELA", (6, 10, 11, 1)),
+    ("D", "PORTA FECHADA", None),
 )
+
+# Two staggered courses, with chipped mortar and a highlight along each stone.
+# Each scanline uses two palette entries, as required by SCREEN 2.
+STONE_ROWS = (
+    (0b01111110, 2, 0),
+    (0b00100001, 0, 1),
+    (0b01001010, 2, 1),
+    (0b01111100, 0, 3),
+    (0b11100111, 1, 0),
+    (0b11001111, 2, 1),
+    (0b01010100, 0, 1),
+    (0b11000111, 0, 3),
+)
+OFFSET_STONE_ROWS = (
+    (0b11110011, 2, 0),
+    (0b10001010, 0, 1),
+    (0b01010001, 2, 1),
+    (0b11100011, 0, 3),
+    (0b00111110, 1, 0),
+    (0b10011101, 2, 1),
+    (0b01001000, 0, 1),
+    (0b00111100, 0, 3),
+)
+CORNER_ROWS = (
+    (0b11100110, 2, 3),
+    (0b01100100, 1, 3),
+    (0b00100110, 2, 3),
+    (0b00100010, 0, 3),
+    (0b11100111, 2, 3),
+    (0b01100101, 1, 3),
+    (0b10100100, 1, 3),
+    (0b00100110, 0, 3),
+)
+
+
+def stone_rows(rows, palette):
+    return tuple((mask, (palette[light] << 4) | palette[shade]) for mask, light, shade in rows)
+
 
 # Each hex pair is a row of a handmade 5x7 glyph.
 FONT = {
@@ -173,21 +211,34 @@ def generate():
     ceiling = [(0, 0x11)] * 8
     floor = [(0x22 if y % 2 else 0x88, 0x41) for y in range(8)]
     terrain_tiles = [tile(floor)]
+
+    # Two-pixel clipping leaves room in the tile bank for both corner styles.
+    heights = [min(64, 2 * round(355 / (2 * n))) for n in range(1, RAY_LIMIT + 2)]
+    wall_heights = sorted(set(heights))
     templates = []
-    for _, _, (light, shade, trim) in TERRAIN[1:]:
-        wall = [
-            (0xFE if y == 0 else 0xBA if y == 1 else 0x7E, (light << 4) | shade)
-            for y in range(8)
-        ]
-        wall[7] = (0x7E, (trim << 4) | shade)
-        terrain_tiles.append(tile(wall))
-        for half_height in range(65):
-            for row in range(16):
-                templates.append(tile(
-                    wall[y] if 64 - half_height <= row * 8 + y < 64 + half_height
-                    else ceiling[y] if row < 8 else floor[y]
-                    for y in range(8)
-                ))
+    door = [(0xFE, 0xD4), (0xBA, 0xD4)] + [(0x7E, 0xD4)] * 5 + [(0x7E, 0xF4)]
+    stone_palettes = [palette for _, _, palette in TERRAIN if palette is not None]
+    walls = [
+        (stone_rows(STONE_ROWS, palette), stone_rows(OFFSET_STONE_ROWS, palette), palette, 0xFF)
+        for palette in stone_palettes
+    ]
+    walls.append((door, None, None, 0))
+    corners = [(stone_rows(CORNER_ROWS, palette), None, palette, 0xE7) for palette in stone_palettes]
+    terrain_tiles.extend(tile(wall) for wall, _, _, _ in walls)
+    for wall, alternate, palette, rim in walls + corners:
+        for half_height in wall_heights:
+            top, bottom = 64 - half_height, 64 + half_height - 1
+            column = ceiling * 8 + floor * 8
+            column[top:bottom + 1] = [wall[y % 8] for y in range(top, bottom + 1)]
+            if palette is not None and half_height < 64:
+                shade, _, light, grout = palette
+                column[top] = (rim, (light << 4) | grout)
+                column[bottom] = (rim, (shade << 4) | grout)
+            for y in range(0, 128, 8):
+                rows = column[y:y + 8]
+                if alternate and y % 16 and top < y and y + 7 < bottom:
+                    rows = alternate
+                templates.append(tile(rows))
 
     def label(text, accent):
         return [
@@ -327,11 +378,13 @@ def generate():
         data("ray_vectors", ray_vectors),
         data("camera_vectors", camera_vectors),
         "ray_limit: equ " + str(RAY_LIMIT),
-        data("heights", (min(64, round(355 / n)) for n in range(1, RAY_LIMIT + 2))),
+        data("heights", (wall_heights.index(height) for height in heights)),
         data("wall_columns", templates),
         "    ds align 256",
         data("world_map", (terrain_chars.index(cell.replace("E", ".")) for row in WORLD for cell in row)),
         data("terrain_tiles", terrain_tiles),
+        # Index by material plus 4 for a corner. Doors use the same style in both cases.
+        data("wall_styles", (i * len(wall_heights) for i in (0, 0, 1, 2, 0, 3, 4, 2))),
         *(data(f"{kind}_tiles", art) for kind, _, art in objects),
         data("object_depths", (distance * 4 // 9 for distance in range(182))),
         data("object_offsets", (0, 1, 5, 14)),

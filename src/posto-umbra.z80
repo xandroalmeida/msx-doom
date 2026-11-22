@@ -46,6 +46,7 @@ line_count: equ &c224
 menu_state: equ &c225             ; 0 game, 1 legend, 2 map
 hud:        equ &c240             ; one row immediately below the viewport
 wall_depth: equ &c260             ; one distance per screen column
+wall_faces: equ &c2c0             ; wall pass scratch, available to objects afterwards
 live_map:   equ &c300             ; one aligned page for terrain and door
 view_size:  equ 512
 radius:     equ 32
@@ -396,32 +397,108 @@ march:
     djnz march
     ld a,1                       ; safety bound for an edited map
 wall_hit:
+    ; Identify the plane of the hit, even when the last ray step crossed two cells.
     push af                      ; material, starting at 1
+    ld c,h                       ; hit X cell
+    or a
+    sbc hl,de                    ; X before the last step
+    ld a,h
+    cp c
+    jr z,ray_y_face
+    exx
+    ld a,c                       ; hit cell's map index
+    and &f0
+    exx
+    or h
+    exx
+    ld c,a
+    ld a,(bc)                    ; wall on the new Y row at the previous X
+    exx
+    or a
+    jr nz,ray_y_face
+    ld a,c
+    or &10                       ; X face
+    jr ray_face
+ray_y_face:
+    exx
+    ld a,h
+    exx
+ray_face:
+    and &1f
+    ld e,a
+    pop af
+    rrca
+    rrca
+    rrca
+    or e
+    ld e,a                       ; material in bits 5-6, plane in bits 0-4
+
+    ld a,(column)
+    add a,wall_depth-&c200
+    ld l,a
+    ld h,wall_depth/256
     ld a,ray_limit
     sub b
-    push af
-    ld a,(column)
-    ld e,a
-    ld d,0
-    ld hl,wall_depth
-    add hl,de
-    pop af
     ld (hl),a
-    ld e,a
+    ld d,a
+    ld a,l
+    add a,wall_faces-wall_depth
+    ld l,a
+    ld (hl),e
+    cp wall_faces-&c200
+    jr z,next_ray
+
+    ; At a change of plane or material, bevel the nearer of the two columns.
+    dec l
+    ld a,(hl)
+    and &7f
+    cp e
+    jr z,next_ray
+    ld a,l
+    sub wall_faces-wall_depth
+    ld l,a
+    ld a,(hl)
+    cp d
+    ld a,l
+    jr c,mark_edge
+    inc a
+mark_edge:
+    add a,wall_faces-wall_depth
+    ld l,a
+    set 7,(hl)
+next_ray:
+    ld hl,column
+    inc (hl)
+    ld a,(hl)
+    cp 32
+    jp nz,render_column
+
+    xor a
+    ld (column),a
+draw_wall:
+    ld a,(column)
+    add a,wall_depth-&c200
+    ld l,a
+    ld h,wall_depth/256
+    ld e,(hl)
+    ld d,0
+    add a,wall_faces-wall_depth
+    ld l,a
+    ld a,(hl)
+    rlca
+    rlca
+    rlca
+    and 7                        ; edge flag followed by the two material bits
+    add a,wall_styles-terrain_tiles
+    ld h,wall_styles/256
+    ld l,a
+    ld c,(hl)                    ; offset for the selected style
     ld hl,heights
     add hl,de
     ld a,(hl)
+    add a,c
     ld h,0
     ld l,a
-    pop af
-    ld de,65
-    dec a
-    jr z,template_offset
-material_span:
-    add hl,de
-    dec a
-    jr nz,material_span
-template_offset:
     add hl,hl
     add hl,hl
     add hl,hl
@@ -447,5 +524,5 @@ next_tile:
     inc (hl)
     ld a,(hl)
     cp 32
-    jp nz,render_column
+    jr nz,draw_wall
     ret
