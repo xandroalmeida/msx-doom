@@ -1,0 +1,472 @@
+; The terrain is shared by movement, rendering, shots and enemy visibility.
+reset_level:
+    ld hl,world_map
+    ld de,live_map
+    ld bc,256
+    ldir
+    ld hl,start_x
+    ld (player_x),hl
+    ld hl,start_y
+    ld (player_y),hl
+    ld hl,spawn_x
+    ld (enemy_x),hl
+    ld hl,spawn_y
+    ld (enemy_y),hl
+    xor a
+    ld (heading),a
+    ld (door_open),a
+    ld (outcome),a
+    ld (hint),a
+    ld (flash),a
+    ld (enemy_wait),a
+    ld e,a
+    ld a,8
+    call WRTPSG
+    ld a,1
+    ld (supplies),a
+    ld (dirty),a
+    ld a,2
+    ld (ammo),a
+    ld (enemy_hp),a
+    ld a,5
+    ld (life),a
+    ret
+
+game_tick:
+    xor a
+    ld (dirty),a
+    ld hl,flash
+    or (hl)
+    jr z,read_buttons
+    dec (hl)
+    jr nz,read_buttons
+    ld e,0
+    ld a,8
+    call WRTPSG
+    call show_flash
+read_buttons:
+    xor a
+    ld (pressed),a
+    call GTTRIG                    ; Space
+    or a
+    jr nz,fire_down
+    ld a,1
+    call GTTRIG                    ; joystick A, port 1
+    or a
+    jr z,test_use
+fire_down:
+    ld a,1
+    ld (pressed),a
+test_use:
+    ld a,6
+    call SNSMAT                    ; left/right Shift share row 6, bit 0
+    bit 0,a
+    jr z,use_down
+    ld a,3
+    call GTTRIG                    ; joystick B, port 1
+    or a
+    jr z,buttons_ready
+use_down:
+    ld hl,pressed
+    set 1,(hl)
+buttons_ready:
+    ld a,(buttons)
+    cpl
+    ld hl,pressed
+    ld b,(hl)
+    and b
+    ld (hl),a
+    ld a,b
+    ld (buttons),a
+
+    ld a,(outcome)
+    or a
+    jr z,play_tick
+    ld a,(pressed)
+    or a
+    ret z
+    jp reset_level
+
+play_tick:
+    call read_controls
+    call check_location
+    ld a,(outcome)
+    or a
+    ret nz
+    ld a,(pressed)
+    bit 1,a
+    call nz,use_door
+    ld a,(pressed)
+    bit 0,a
+    call nz,fire_shot
+    jp enemy_tick
+
+; Walking probes four terrain corners and keeps a live enemy solid.
+player_clear:
+    call box_clear
+    ret nz
+    ld a,(enemy_hp)
+    or a
+    ret z
+    ld ix,enemy_x
+    ld a,100
+    call near_point
+    jr nz,actor_clear
+    inc a
+    ret
+actor_clear:
+    xor a
+    ret
+
+check_location:
+    ld hl,(player_x)
+    ld de,(player_y)
+    ld ix,exit_point
+    ld a,112
+    call near_point
+    jr nz,check_supply
+    ld a,2
+    ld (outcome),a
+    jp mark_dirty
+check_supply:
+    ld a,(supplies)
+    or a
+    ret z
+    ld ix,ammo_point
+    ld a,112
+    call near_point
+    ret nz
+    xor a
+    ld (supplies),a
+    ld a,(ammo)
+    add a,4
+    ld (ammo),a
+    ld a,5
+    jp set_hint
+
+use_door:
+    ld a,(door_open)
+    or a
+    ret nz
+    ld hl,(player_x)
+    ld de,(player_y)
+    ld ix,door_point
+    ld a,224
+    call near_point
+    ret nz
+    ld a,(enemy_hp)
+    or a
+    jr z,unlock_door
+    ld a,3
+    jp set_hint
+unlock_door:
+    xor a
+    ld (live_map+door_index),a
+    inc a
+    ld (door_open),a
+    ld a,2
+    jp set_hint
+
+fire_shot:
+    ld hl,ammo
+    ld a,(hl)
+    or a
+    jr nz,consume_round
+    ld a,4
+    jp set_hint
+consume_round:
+    dec (hl)
+    ld a,2
+    ld (flash),a
+    call play_shot_sound
+    call mark_dirty
+    ld a,(enemy_hp)
+    or a
+    ret z
+    call facing_vector
+    ld (line_dx),bc
+    ld (line_dy),de
+    ld hl,(player_x)
+    ld (line_x),hl
+    ld hl,(player_y)
+    ld (line_y),hl
+    ld a,48                        ; 7.5 world cells at 40/256 per step
+    ld (line_count),a
+shot_step:
+    call advance_line
+    ret nz                         ; terrain blocks the shot first
+    ld ix,enemy_x
+    ld a,82
+    call near_point
+    jr z,damage_enemy
+    ld hl,line_count
+    dec (hl)
+    jr nz,shot_step
+    ret
+damage_enemy:
+    ld hl,enemy_hp
+    dec (hl)
+    jr z,enemy_defeated
+    ld a,4
+    ld (enemy_wait),a
+    ret
+enemy_defeated:
+    ld a,1
+    jp set_hint
+
+enemy_tick:
+    ld a,(enemy_hp)
+    or a
+    ret z
+    ld hl,enemy_wait
+    ld a,(hl)
+    or a
+    jr z,enemy_ready
+    dec (hl)
+    ret
+enemy_ready:
+    ld hl,(enemy_x)
+    ld de,(enemy_y)
+    ld a,h
+    ld bc,(player_x)
+    sub b
+    call coarse_range
+    ret nc
+    ld a,d
+    ld bc,(player_y)
+    sub b
+    call coarse_range
+    ret nc
+    call enemy_sees_player
+    ret nz
+    ld ix,player_x
+    ld a,128
+    call near_point
+    jr nz,chase_player
+    ld a,10
+    ld (enemy_wait),a
+    ld hl,life
+    dec (hl)
+    jp nz,mark_dirty
+    ld a,1
+    ld (outcome),a
+    jp mark_dirty
+chase_player:
+    ld a,1
+    ld (enemy_wait),a
+    ld bc,(player_x)
+    call nudge
+    jr z,chase_y
+    call box_clear
+    jr nz,chase_y
+    ld (enemy_x),hl
+    call mark_dirty
+chase_y:
+    ld hl,(enemy_x)
+    ld de,(enemy_y)
+    ex de,hl
+    ld bc,(player_y)
+    call nudge
+    ret z
+    ex de,hl
+    call box_clear
+    ret nz
+    ld (enemy_y),de
+    jp mark_dirty
+
+coarse_range:
+    bit 7,a
+    jr z,range_positive
+    neg
+range_positive:
+    cp 4
+    ret
+
+; Move HL at most 28 units toward BC, leaving DE intact. Z if already there.
+nudge:
+    or a
+    sbc hl,bc
+    jr c,nudge_up
+    ld a,h
+    or a
+    jr nz,nudge_down
+    ld a,l
+    or a
+    jr z,nudge_stop
+    cp 28
+    jr c,nudge_arrived
+nudge_down:
+    push de
+    ld de,-28
+    jr nudge_offset
+nudge_up:
+    ld a,h
+    inc a
+    jr nz,nudge_up_step
+    ld a,l
+    cp 256-28
+    jr nc,nudge_arrived
+nudge_up_step:
+    push de
+    ld de,28
+nudge_offset:
+    add hl,bc
+    add hl,de
+    pop de
+    ld a,1
+    or a
+    ret
+nudge_arrived:
+    ld h,b
+    ld l,c
+    ld a,1
+    or a
+    ret
+nudge_stop:
+    ld h,b
+    ld l,c
+    ret
+
+; Test 16 evenly spaced samples toward the player's position.
+enemy_sees_player:
+    push hl
+    push de
+    ld (line_x),hl
+    ld (line_y),de
+    ld bc,(enemy_x)
+    ld hl,(player_x)
+    or a
+    sbc hl,bc
+    call divide16
+    ld (line_dx),hl
+    ld bc,(enemy_y)
+    ld hl,(player_y)
+    or a
+    sbc hl,bc
+    call divide16
+    ld (line_dy),hl
+    ld a,16
+    ld (line_count),a
+sight_step:
+    call advance_line
+    jr nz,sight_done
+    ld hl,line_count
+    dec (hl)
+    jr nz,sight_step
+sight_done:
+    pop de
+    pop hl
+    ret
+
+advance_line:
+    ld hl,(line_x)
+    ld bc,(line_dx)
+    add hl,bc
+    ld (line_x),hl
+    ex de,hl
+    ld hl,(line_y)
+    ld bc,(line_dy)
+    add hl,bc
+    ld (line_y),hl
+    ex de,hl
+    jp cell
+
+divide16:
+    sra h
+    rr l
+    sra h
+    rr l
+    sra h
+    rr l
+    sra h
+    rr l
+    ret
+
+; A radius (less than a cell), HL/DE coordinates, IX points at X then Y.
+; Z on proximity. HL and DE survive.
+near_point:
+    push hl
+    push de
+    ld c,(ix+0)
+    ld b,(ix+1)
+    call near_axis
+    jr nc,point_far
+    ex de,hl
+    ld c,(ix+2)
+    ld b,(ix+3)
+    call near_axis
+    jr nc,point_far
+    xor a
+    jr point_done
+point_far:
+    ld a,1
+    or a
+point_done:
+    pop de
+    pop hl
+    ret
+
+near_axis:
+    or a
+    sbc hl,bc
+    ld b,a
+    call abs_hl
+    ld a,h
+    or a
+    ld a,b
+    ret nz
+    ld a,l
+    cp b
+    ld a,b
+    ret
+
+abs_hl:
+    bit 7,h
+    ret z
+neg_hl:
+    xor a
+    sub l
+    ld l,a
+    sbc a,a
+    sub h
+    ld h,a
+    ret
+
+set_hint:
+    ld (hint),a
+mark_dirty:
+    ld a,1
+    ld (dirty),a
+    ret
+
+play_shot_sound:
+    ld a,7
+    call RDPSG
+    and &c0
+    or &37                         ; disable all tones, enable noise on A
+    ld e,a
+    ld a,7
+    call WRTPSG
+    ld a,6
+    ld e,7
+    call WRTPSG
+    ld a,8
+    ld e,12
+    jp WRTPSG
+
+show_flash:
+    ld hl,&1b04
+    ld a,(flash)
+    or a
+    ld a,209
+    jr z,write_flash
+    ld a,135
+write_flash:
+    jp WRTVRM
+
+ammo_point:
+    dw ammo_x,ammo_y
+exit_point:
+    dw exit_x,exit_y
+door_point:
+    dw door_x,door_y

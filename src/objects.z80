@@ -1,0 +1,331 @@
+; Objects are projected onto a tile grid, then clipped against each wall ray.
+obj_art:     equ &c280
+rel_x:       equ &c282
+rel_y:       equ &c283
+camera_sin:  equ &c284
+camera_cos:  equ &c285
+view_depth:  equ &c286
+obj_depth:   equ &c287
+obj_size:    equ &c288
+obj_column:  equ &c289
+obj_left:    equ &c28a
+obj_row:     equ &c28b
+side_sign:   equ &c28d
+
+render_scene:
+    call render_view
+    ld a,(outcome)
+    or a
+    jr nz,render_end
+    ld a,(heading)
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,camera_vectors
+    add hl,de
+    ld a,(hl)
+    ld (camera_sin),a
+    inc hl
+    ld a,(hl)
+    ld (camera_cos),a
+    ld a,(door_open)
+    or a
+    jr z,render_enemy
+    ld hl,exit_x
+    ld de,exit_y
+    ld bc,exit_tiles
+    call project_object
+render_enemy:
+    ld a,(enemy_hp)
+    or a
+    jr z,render_pickup
+    ld hl,(enemy_x)
+    ld de,(enemy_y)
+    ld bc,creature_tiles
+    call project_object
+render_pickup:
+    ld a,(supplies)
+    or a
+    jr z,render_hud
+    ld hl,ammo_x
+    ld de,ammo_y
+    ld bc,ammo_tiles
+    call project_object
+    jr render_hud
+render_end:
+    ld hl,defeat_line
+    cp 1
+    jr z,copy_end
+    ld hl,victory_line
+copy_end:
+    ld de,view+8*32
+    ld bc,32
+    ldir
+
+render_hud:
+    ld hl,hud_template
+    ld de,hud
+    ld bc,32
+    ldir
+    ld a,(life)
+    call digit_tile
+    ld (hud+6),a
+    ld a,(ammo)
+    call digit_tile
+    ld (hud+13),a
+    ld a,(hint)
+    ld l,a
+    ld h,0
+    ld d,h
+    ld e,l
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,de
+    ld de,hud_hints
+    add hl,de
+    ld de,hud+15
+    ld bc,17
+    ldir
+    ret
+
+digit_tile:
+    ld e,a
+    ld d,0
+    ld hl,hud_digits
+    add hl,de
+    ld a,(hl)
+    ret
+
+; HL/DE world position, BC points to the four pre-scaled tile sets.
+; Calculate signed relative position in sixteenths of a world cell.
+project_object:
+    ld (obj_art),bc
+    ld bc,(player_x)
+    call relative_axis
+    ret nz
+    ld (rel_x),a
+    ex de,hl
+    ld bc,(player_y)
+    call relative_axis
+    ret nz
+    ld (rel_y),a
+
+    ; Transform onto forward (depth) and right (side) camera axes.
+    ld a,(rel_y)
+    ld e,a
+    ld a,(camera_cos)
+    call signed_product
+    push hl
+    ld a,(rel_x)
+    ld e,a
+    ld a,(camera_sin)
+    call signed_product
+    pop de
+    or a
+    sbc hl,de
+    call divide64
+    ld a,h
+    or a
+    ret nz
+    ld a,l
+    cp 4
+    ret c
+    ld (view_depth),a
+
+    ld a,(rel_y)
+    ld e,a
+    ld a,(camera_sin)
+    call signed_product
+    push hl
+    ld a,(rel_x)
+    ld e,a
+    ld a,(camera_cos)
+    call signed_product
+    pop de
+    add hl,de
+    call divide64
+    ld a,h
+    ld (side_sign),a
+    call abs_hl
+    ld a,h
+    or a
+    ret nz
+    ld a,(view_depth)
+    cp l
+    ret c
+
+    ; Horizontal focal length is approximately 25 tile columns.
+    ld d,h
+    ld e,l
+    add hl,hl
+    add hl,de
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,de
+    ld e,a
+    ld d,0
+    ld b,0
+divide_screen_x:
+    or a
+    sbc hl,de
+    jr c,screen_x_ready
+    inc b
+    jr divide_screen_x
+screen_x_ready:
+    ld a,(side_sign)
+    or a
+    ld a,b
+    jr z,center_x
+    neg
+center_x:
+    add a,16
+    ld c,a
+    ld a,(view_depth)
+    ld e,a
+    ld hl,object_depths
+    add hl,de
+    ld a,(hl)
+    ld (obj_depth),a
+
+    ; The creature grows from one tile at distance to four tiles up close.
+    ld a,(view_depth)
+    ld b,4
+    cp 22
+    jr c,size_ready
+    dec b
+    cp 36
+    jr c,size_ready
+    dec b
+    cp 72
+    jr c,size_ready
+    dec b
+size_ready:
+    ld a,b
+    ld (obj_size),a
+    ld (obj_left),a
+    srl a
+    ld e,a
+    ld a,c
+    sub e
+    ld (obj_column),a
+    ld a,8
+    sub e
+    ld h,0
+    ld l,a
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    ld de,view
+    add hl,de
+    ld (obj_row),hl
+    dec b
+    ld e,b
+    ld d,0
+    ld hl,object_offsets
+    add hl,de
+    ld e,(hl)
+    ld hl,(obj_art)
+    add hl,de
+    ld (obj_art),hl
+
+paint_object_column:
+    ld a,(obj_column)
+    cp 32
+    jr nc,advance_object
+    ld e,a
+    ld d,0
+    ld hl,wall_depth
+    add hl,de
+    ld a,(obj_depth)
+    cp (hl)
+    jr nc,advance_object
+    ld hl,(obj_row)
+    add hl,de
+    ex de,hl
+    ld hl,(obj_art)
+    ld a,(obj_size)
+    ld b,a
+paint_object_tile:
+    ld a,(hl)
+    or a
+    jr z,clear_object_tile
+    ld (de),a
+clear_object_tile:
+    inc hl
+    ld a,e
+    add a,32
+    ld e,a
+    jr nc,next_object_tile
+    inc d
+next_object_tile:
+    djnz paint_object_tile
+advance_object:
+    ld a,(obj_size)
+    ld e,a
+    ld d,0
+    ld hl,(obj_art)
+    add hl,de
+    ld (obj_art),hl
+    ld hl,obj_column
+    inc (hl)
+    ld hl,obj_left
+    dec (hl)
+    jr nz,paint_object_column
+    ret
+
+relative_axis:
+    or a
+    sbc hl,bc
+    call divide16
+    ld a,l
+    add a,a
+    sbc a,a
+    cp h
+    ld a,l
+    ret
+
+divide64:
+    call divide16
+    sra h
+    rr l
+    sra h
+    rr l
+    ret
+
+; Signed 8-bit A times signed 8-bit E. Camera components use seven bits.
+signed_product:
+    ld c,a
+    xor e
+    push af
+    ld a,c
+    or a
+    jp p,positive_camera
+    neg
+positive_camera:
+    ld c,a
+    ld a,e
+    or a
+    jp p,positive_displacement
+    neg
+positive_displacement:
+    ld e,a
+    ld d,0
+    ld hl,0
+    ld b,7
+multiply_bit:
+    srl c
+    jr nc,no_add
+    add hl,de
+no_add:
+    sla e
+    rl d
+    djnz multiply_bit
+    pop af
+    or a
+    ret p
+    jp neg_hl

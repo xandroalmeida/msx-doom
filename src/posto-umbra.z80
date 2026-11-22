@@ -1,0 +1,445 @@
+; MSX1 cartridge mapped at 4000h. Page 3 holds the working state.
+CHGMOD:    equ &005f
+DISSCR:    equ &0041
+ENASCR:    equ &0044
+WRTVDP:    equ &0047
+LDIRVM:    equ &005c
+WRTVRM:    equ &004d
+WRTPSG:    equ &0093
+RDPSG:     equ &0096
+GTSTCK:    equ &00d5
+GTTRIG:    equ &00d8
+SNSMAT:    equ &0141
+JIFFY:     equ &fc9e
+BAKCLR:    equ &f3ea
+BDRCLR:    equ &f3eb
+
+view:       equ &c000             ; 32 x 16 tile names
+player_x:   equ &c200             ; unsigned 8.8 world coordinates
+player_y:   equ &c202
+heading:    equ &c204             ; 64 directions, zero is north
+front_page: equ &c205             ; VDP R2, 6 = 1800h, 7 = 1c00h
+dirty:      equ &c206
+column:     equ &c207
+ray_cursor: equ &c208
+last_tick:  equ &c20a
+shown:      equ &c20b             ; increments after each page flip
+move_sign:  equ &c20c
+buttons:    equ &c20d
+pressed:    equ &c20e
+life:       equ &c20f
+ammo:       equ &c210
+enemy_hp:   equ &c211
+enemy_x:    equ &c212
+enemy_y:    equ &c214
+enemy_wait: equ &c216
+supplies:   equ &c217
+door_open:  equ &c218
+outcome:    equ &c219             ; 0 playing, 1 dead, 2 escaped
+hint:       equ &c21a
+flash:      equ &c21b
+line_x:     equ &c21c
+line_y:     equ &c21e
+line_dx:    equ &c220
+line_dy:    equ &c222
+line_count: equ &c224
+hud:        equ &c240             ; one row immediately below the viewport
+wall_depth: equ &c260             ; one distance per screen column
+live_map:   equ &c300             ; one aligned page for terrain and door
+view_size:  equ 512
+radius:     equ 32
+
+    org &4000
+    dump &4000
+    db &41,&42
+    dw start,0,0,0,0,0,0
+
+start:
+    ld a,1
+    ld (BAKCLR),a
+    ld (BDRCLR),a
+    ld a,2
+    call CHGMOD
+    call DISSCR
+    call init_video
+    xor a
+    ld (buttons),a
+    ld (shown),a
+    call reset_level
+    ld a,6
+    ld (front_page),a
+    call render_scene
+    ld de,&1880
+    call copy_frame
+    call ENASCR
+    ei
+    ld a,(JIFFY)
+    ld (last_tick),a
+
+main_loop:
+    halt
+tick_check:
+    ld a,(JIFFY)
+    ld b,a
+    ld a,(last_tick)
+    cpl
+    add a,b
+    inc a                         ; elapsed ticks modulo 256
+    cp 3
+    jr c,main_loop
+    ld a,b
+    ld (last_tick),a
+    call game_tick
+    ld a,(dirty)
+    or a
+    jr z,main_loop
+
+    call render_scene
+    ld a,(front_page)
+    xor 1
+    ld (front_page),a
+    add a,a
+    add a,a
+    ld d,a
+    ld e,&80
+    call copy_frame
+    halt                           ; switch to the completed page at VBlank
+    ld a,(front_page)
+    ld b,a
+    ld c,2
+    call WRTVDP
+    call show_flash
+    ld hl,shown
+    inc (hl)
+    jr tick_check
+
+copy_frame:
+    push de
+    ld hl,view
+    ld bc,view_size
+    call LDIRVM
+    pop de
+    inc d                         ; offset 2A0h = row 21
+    inc d
+    ld e,&a0
+    ld hl,hud
+    ld bc,32
+    jp LDIRVM
+
+init_video:
+    ld hl,tile_patterns
+    ld de,&0000
+    call upload_tile_bank
+    ld hl,tile_patterns
+    ld de,&0800
+    call upload_tile_bank
+    ld hl,tile_patterns
+    ld de,&1000
+    call upload_tile_bank
+    ld hl,tile_colors
+    ld de,&2000
+    call upload_tile_bank
+    ld hl,tile_colors
+    ld de,&2800
+    call upload_tile_bank
+    ld hl,tile_colors
+    ld de,&3000
+    call upload_tile_bank
+    ld hl,chrome
+    ld de,&1800
+    ld bc,768
+    call LDIRVM
+    ld hl,chrome
+    ld de,&1c00
+    ld bc,768
+    call LDIRVM
+    ld hl,sprite_patterns
+    ld de,&3800
+    ld bc,sprite_patterns_end-sprite_patterns
+    call LDIRVM
+    ld hl,sprites
+    ld de,&1b00
+    ld bc,sprites_end-sprites
+    jp LDIRVM
+
+upload_tile_bank:
+    ld bc,tile_patterns_end-tile_patterns
+    jp LDIRVM
+
+sprite_patterns:
+    db &00,&10,&10,&6c,&10,&10,&00,&00
+    db &00,&01,&03,&07,&0f,&1f,&1f,&1f
+    db &00,&80,&c0,&e0,&f0,&f8,&f8,&f8
+    db &1f,&3f,&7f,&7f,&61,&7f,&ff,&ff
+    db &f8,&fc,&fe,&fe,&86,&fe,&ff,&ff
+    db &10,&92,&54,&38,&7c,&54,&92,&10
+    db &00,&01,&01,&02,&02,&04,&04,&08
+    db &00,&80,&80,&40,&40,&20,&20,&10
+sprite_patterns_end:
+sprites:
+    db 92,124,0,15
+    db 209,124,5,11               ; muzzle flash, hidden until a shot
+    db 143,120,1,14, 143,128,2,14
+    db 151,120,3,14, 151,128,4,14
+    db 143,120,6,5, 143,128,7,5
+    db 208
+sprites_end:
+
+read_controls:
+    xor a
+    call GTSTCK                    ; arrows
+    or a
+    jr nz,stick_ready
+    ld a,1
+    call GTSTCK                    ; joystick port 1
+    or a
+    ret z
+stick_ready:
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,stick_actions
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld c,(hl)
+    or a
+    jr z,try_step
+    ld b,a
+    ld a,(heading)
+    add a,b
+    and 63
+    ld (heading),a
+    ld a,1
+    ld (dirty),a
+try_step:
+    ld a,c
+    or a
+    ret z
+    ld (move_sign),a
+    call facing_vector
+    jr apply_walk
+
+; BC and DE are the signed 8.8 X and Y movement components.
+facing_vector:
+    ld a,(heading)
+    add a,a
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,walk_vectors
+    add hl,de
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ret
+
+apply_walk:
+    ld hl,(player_x)
+    ld a,(move_sign)
+    bit 7,a
+    jr z,step_x_forward
+    or a
+    sbc hl,bc
+    jr check_x
+step_x_forward:
+    add hl,bc
+check_x:
+    push de
+    ld de,(player_y)
+    call player_clear
+    jr nz,keep_x
+    ; Compare the full coordinate with the previous X.
+    ld bc,(player_x)
+    or a
+    sbc hl,bc
+    jr z,keep_x
+    add hl,bc
+    ld (player_x),hl
+    ld a,1
+    ld (dirty),a
+keep_x:
+    pop bc
+    ld hl,(player_y)
+    ld a,(move_sign)
+    bit 7,a
+    jr z,step_y_forward
+    or a
+    sbc hl,bc
+    jr check_y
+step_y_forward:
+    add hl,bc
+check_y:
+    ex de,hl
+    ld hl,(player_x)
+    call player_clear
+    ret nz
+    ex de,hl
+    ld bc,(player_y)
+    or a
+    sbc hl,bc
+    ret z
+    add hl,bc
+    ld (player_y),hl
+    ld a,1
+    ld (dirty),a
+    ret
+
+stick_actions:
+    db 0,0, 0,1, 1,1, 1,0, 1,-1, 0,-1, -1,-1, -1,0, -1,1
+
+; HL = X, DE = Y. Preserve both coordinates. Z if all four corners are open.
+box_clear:
+    push hl
+    push de
+    ld bc,-radius
+    add hl,bc
+    ex de,hl
+    add hl,bc
+    ex de,hl
+    call cell
+    jr nz,box_done
+    ld bc,2*radius
+    add hl,bc
+    call cell
+    jr nz,box_done
+    ld bc,2*radius
+    ex de,hl
+    add hl,bc
+    ex de,hl
+    call cell
+    jr nz,box_done
+    ld bc,-2*radius
+    add hl,bc
+    call cell
+box_done:
+    pop de
+    pop hl
+    ret
+
+cell:
+    ld a,d
+    add a,a
+    add a,a
+    add a,a
+    add a,a
+    or h
+    ld c,a
+    ld b,live_map/256
+    ld a,(bc)
+    or a
+    ret
+
+render_view:
+    ld a,(heading)
+    ld h,a
+    ld l,0                       ; 32 rays * 2 bytes = 64 bytes per direction
+    srl h
+    rr l
+    srl h
+    rr l
+    ld de,ray_vectors
+    add hl,de
+    ld (ray_cursor),hl
+    xor a
+    ld (column),a
+render_column:
+    ld hl,(ray_cursor)
+    ld e,(hl)
+    ld a,e
+    add a,a
+    sbc a,a
+    ld d,a
+    inc hl
+    ld c,(hl)
+    ld a,c
+    add a,a
+    sbc a,a
+    ld b,a
+    inc hl
+    ld (ray_cursor),hl
+    push bc
+    exx
+    pop de
+    ld hl,(player_y)
+    ld b,live_map/256
+    exx
+    ld hl,(player_x)
+    ld b,ray_limit
+march:
+    add hl,de                    ; main registers hold X and dx
+    ld a,h
+    exx
+    add hl,de                    ; alternate registers hold Y and dy
+    ld c,a
+    ld a,h
+    add a,a
+    add a,a
+    add a,a
+    add a,a
+    or c
+    ld c,a
+    ld a,(bc)
+    exx
+    or a
+    jr nz,wall_hit
+    djnz march
+    ld a,1                       ; safety bound for an edited map
+wall_hit:
+    push af                      ; material, starting at 1
+    ld a,ray_limit
+    sub b
+    push af
+    ld a,(column)
+    ld e,a
+    ld d,0
+    ld hl,wall_depth
+    add hl,de
+    pop af
+    ld (hl),a
+    ld e,a
+    ld hl,heights
+    add hl,de
+    ld a,(hl)
+    ld h,0
+    ld l,a
+    pop af
+    ld de,65
+    dec a
+    jr z,template_offset
+    add hl,de
+    dec a
+    jr z,template_offset
+    add hl,de
+template_offset:
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    ld de,wall_columns
+    add hl,de
+    ld a,(column)
+    ld e,a
+    ld d,view/256
+    ld b,16
+draw_column:
+    ld a,(hl)
+    ld (de),a
+    inc hl
+    ld a,e
+    add a,32
+    ld e,a
+    jr nc,next_tile
+    inc d
+next_tile:
+    djnz draw_column
+    ld hl,column
+    inc (hl)
+    ld a,(hl)
+    cp 32
+    jp nz,render_column
+    ret
