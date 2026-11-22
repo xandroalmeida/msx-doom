@@ -1,23 +1,23 @@
 ; Objects are projected onto a tile grid, then clipped against each wall ray.
-obj_art:     equ &c280
-rel_x:       equ &c282
-rel_y:       equ &c283
-camera_sin:  equ &c284
-camera_cos:  equ &c285
-view_depth:  equ &c286
-side_sign:   equ &c287
-object_record: equ &c288
+obj_art:     equ &f180
+rel_x:       equ &f182
+rel_y:       equ &f183
+camera_sin:  equ &f184
+camera_cos:  equ &f185
+view_depth:  equ &f186
+side_sign:   equ &f187
+object_record: equ &f188
 obj_tiles:   equ object_record
 obj_row:     equ object_record+2
 obj_depth:   equ object_record+4
 obj_size:    equ object_record+5
 obj_column:  equ object_record+6
 record_size: equ 7
-obj_left:    equ &c28f
-queue_end:   equ &c296
-best_record: equ &c298
-best_depth:  equ &c29a
-object_queue: equ &c2c0           ; at most five 7-byte records per frame
+obj_left:    equ &f18f
+queue_end:   equ &f196
+best_record: equ &f198
+best_depth:  equ &f19a
+object_queue: equ &f000           ; up to 31 records of seven bytes each
 
 render_scene:
     ld a,(menu_state)
@@ -41,45 +41,47 @@ render_scene:
     inc hl
     ld a,(hl)
     ld (camera_cos),a
-    ld a,(door_open)
+    ld iy,enemies
+render_enemies:
+    call render_actor
+    call next_enemy
+    jr nz,render_enemies
+    ld iy,props
+render_props:
+    call render_prop
+    call next_prop
+    jr nz,render_props
+    jr render_object_queue
+
+render_actor:
+    ld a,(iy+actor_hp)
     or a
-    jr z,render_enemy
-    ld hl,(exit_point)
-    ld de,(exit_point+2)
-    ld bc,exit_tiles
-    call project_object
-render_enemy:
-    ld a,(enemy_hp)
-    or a
-    jr z,render_brute
-    ld hl,(enemy_x)
-    ld de,(enemy_y)
+    ret z
     ld bc,creature_tiles
-    call project_object
-render_brute:
-    ld a,(enemy_brute+actor_hp)
+    ld a,(iy+actor_kind)
     or a
-    jr z,render_pickup
-    ld hl,(enemy_brute+actor_x)
-    ld de,(enemy_brute+actor_y)
+    jr z,project_entity
     ld bc,brute_tiles
-    call project_object
-render_pickup:
-    ld a,(supplies)
+    jr project_entity
+
+render_prop:
+    ld a,(iy+actor_hp)
     or a
-    jr z,render_key
-    ld hl,(ammo_point)
-    ld de,(ammo_point+2)
-    ld bc,ammo_tiles
-    call project_object
-render_key:
-    ld a,(key_waiting)
-    or a
-    jr z,render_object_queue
-    ld hl,(key_point)
-    ld de,(key_point+2)
-    ld bc,key_tiles
-    call project_object
+    ret z
+    ld a,(iy+actor_kind)
+    cp prop_door
+    ret z
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,prop_art
+    add hl,de
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+project_entity:
+    call actor_position
+    jp project_object
 
 ; Draw far to near. A consumed record has zero depth.
 render_object_queue:
@@ -121,19 +123,43 @@ draw_farthest:
     jr render_object_queue
 
 render_hud:
+    ld a,(minimap)
+    or a
+    call nz,draw_minimap
     ld hl,hud_template
     ld de,hud
     ld bc,32
     ldir
     call render_health
+    ld a,(weapon)
+    or a
+    ld hl,weapon_names
+    jr z,hud_weapon
+    ld hl,weapon_names+7
+hud_weapon:
+    ld de,hud+hud_weapon_offset
+    ld bc,7
+    ldir
+    ld a,(sector)
+    inc a
+    call digit_tile
+    ld (hud+hud_sector_offset),a
     ld a,(ammo)
+    ld b,0
+ammo_tens:
     cp 10
-    jr c,ammo_units
+    jr c,ammo_digit
     sub 10
+    inc b
+    jr ammo_tens
+ammo_digit:
     push af
-    ld a,1
+    ld a,b
+    or a
+    jr z,ammo_remainder
     call digit_tile
     ld (hud+hud_ammo_offset),a
+ammo_remainder:
     pop af
 ammo_units:
     call digit_tile

@@ -37,7 +37,14 @@ joy_weapon:
     ld a,1
     call GTSTCK
     cp 1
+    jr z,joy_switch_weapon
+    cp 5
     jr nz,keyboard_fire
+    ld hl,pressed
+    res 1,(hl)
+    set 5,(hl)                    ; B + down toggles the live minimap
+    jr keyboard_fire
+joy_switch_weapon:
     ld hl,pressed
     res 1,(hl)
     set 3,(hl)                    ; B + up changes weapon
@@ -64,8 +71,12 @@ keyboard_weapon:
     set 3,(hl)
 keyboard_menu:
     ld a,4
-    call SNSMAT                    ; M and R share row 4
+    call SNSMAT                    ; M, N and R share row 4
     ld hl,pressed
+    bit 3,a
+    jr nz,keyboard_pause
+    set 5,(hl)
+keyboard_pause:
     bit 2,a
     jr nz,keyboard_retry
     set 2,(hl)
@@ -100,7 +111,11 @@ play_tick:
     jp nz,reset_level
     bit 3,a
     jp nz,switch_weapon
-    call read_controls
+    bit 5,a
+    jr nz,toggle_minimap
+    ld a,(buttons)
+    bit 5,a
+    call z,read_controls
     call check_location
     ld a,(outcome)
     or a
@@ -108,28 +123,52 @@ play_tick:
     ld a,(pressed)
     bit 1,a
     call nz,use_door
+    ld a,(buttons)
+    and 5                        ; fire alone, without the joystick menu chord
+    cp 1
+    jr z,held_trigger
+    xor a
+    ld (shot_repeat),a
+    jr update_actors
+held_trigger:
     ld a,(pressed)
     bit 0,a
-    call nz,fire_shot
-    ld iy,enemy_hp
+    jr nz,fire_trigger
+    ld hl,shot_repeat
+    ld a,(hl)
+    or a
+    jr z,update_actors
+    dec (hl)
+    jr nz,update_actors
+fire_trigger:
+    ld a,5
+    ld (shot_repeat),a
+    call fire_shot
+update_actors:
+    ld iy,enemies
+update_enemies:
     call enemy_tick
     ld a,(outcome)
     or a
     ret nz
-    ld iy,enemy_brute
-    jp enemy_tick
+    call next_enemy
+    jr nz,update_enemies
+    ret
 
-; Walking probes four terrain corners and keeps a live enemy solid.
+toggle_minimap:
+    ld a,(minimap)
+    xor 1
+    ld (minimap),a
+    jp mark_dirty
+
+; Walking probes four terrain corners and keeps live enemies solid.
 player_clear:
     call box_clear
     ret nz
-    ld iy,enemy_hp
-    ld ix,enemy_x
+    ld a,&ff
+    ld (ignored_actor),a
     ld a,100
-    call test_first_actor
-    jr z,actor_blocks
-    ld a,100
-    call test_second_actor
+    call find_enemy
     jr z,actor_blocks
     xor a
     ret
@@ -138,101 +177,144 @@ actor_blocks:
     or a
     ret
 
-test_second_actor:
-    ld iy,enemy_brute
-    ld ix,enemy_brute+actor_x
-test_first_actor:
-    ld b,a
+; Z if an actor is inside the radius. IY then points at that actor.
+find_enemy:
+    ld (actor_radius),a
+    ld iy,enemies
+find_enemy_test:
     ld a,(iy+actor_hp)
     or a
-    jr nz,actor_live
+    jr z,find_enemy_next
+    ld a,(iy+actor_x+1)
+    sub h
     inc a
+    cp 3
+    jr nc,find_enemy_next
+    ld a,(iy+actor_y+1)
+    sub d
+    inc a
+    cp 3
+    jr nc,find_enemy_next
+    push iy
+    pop bc
+    ld a,(ignored_actor)
+    cp c
+    jr z,find_enemy_next
+    call actor_point
+    ld a,(actor_radius)
+    call near_point
+    ret z
+find_enemy_next:
+    call next_enemy
+    jr nz,find_enemy_test
+    inc a                        ; enemy_end never occupies the last byte
     ret
-actor_live:
-    ld a,b
-    jp near_point
 
 check_location:
-    ld hl,(player_x)
-    ld de,(player_y)
-    ld ix,exit_point
-    ld a,112
-    call near_point
-    jr nz,check_supply
-    jp stage_exit
-check_supply:
-    ld a,(supplies)
+    ld iy,props
+check_pickups:
+    call collect_prop
+    ld a,(outcome)
     or a
-    jr z,check_key
-    ld ix,ammo_point
-    ld a,112
-    call near_point
-    jr nz,check_key
-    xor a
-    ld (supplies),a
-    ld a,(ammo)
-    add a,4
-    ld (ammo),a
-    ld e,110
-    call event_tone
-    ld a,5
-    call set_hint
-check_key:
-    ld a,(key_waiting)
+    ret nz
+    call next_prop
+    jr nz,check_pickups
+    ret
+
+collect_prop:
+    ld a,(iy+actor_hp)
     or a
+    ret z
+    ld a,(iy+actor_kind)
+    cp prop_door
     ret z
     ld hl,(player_x)
     ld de,(player_y)
-    ld ix,key_point
+    call actor_point
     ld a,112
     call near_point
     ret nz
-    xor a
-    ld (key_waiting),a
-    ld e,82
-    call event_tone
-    ld a,(enemy_hp)
-    ld hl,enemy_brute
-    or (hl)
-    ld a,0
-    jr nz,key_message
+    ld a,(iy+actor_kind)
+    cp prop_exit
+    jp z,stage_exit
+    cp prop_key
+    jr z,collect_key
+    cp prop_medic
+    jr z,collect_medic
+    ld a,(ammo)
+    add a,(iy+actor_arg)
+    cp 100
+    jr c,ammo_collected
+    ld a,99
+ammo_collected:
+    ld (ammo),a
+    ld a,4
+    jr pickup_feedback
+collect_medic:
+    ld a,(life)
+    cp max_life
+    ret nc
+    add a,(iy+actor_arg)
+    cp max_life
+    jr c,medic_collected
+    ld a,max_life
+medic_collected:
+    ld (life),a
+    ld a,6
+    jr pickup_feedback
+collect_key:
+    ld a,(access_keys)
+    or (iy+actor_arg)
+    ld (access_keys),a
     ld a,1
-key_message:
+pickup_feedback:
+    ld (iy+actor_hp),0
+    push af
+    ld e,110
+    call event_tone
+    pop af
     jp set_hint
 
 use_door:
-    ld a,(door_open)
+    ld iy,props
+find_door:
+    ld a,(iy+actor_kind)
+    cp prop_door
+    jr nz,next_door
+    ld a,(iy+actor_hp)
     or a
-    ret nz
+    jr z,next_door
     ld hl,(player_x)
     ld de,(player_y)
-    ld ix,door_point
+    call actor_point
     ld a,224
     call near_point
-    ret nz
-    ld a,(enemy_hp)
-    ld hl,enemy_brute
-    or (hl)
-    jr nz,door_locked
-    ld a,(key_waiting)
-    or a
-    jr z,unlock_door
-    ld a,6
-    jp set_hint
-door_locked:
-    ld a,3
+    jr z,test_door_key
+next_door:
+    call next_prop
+    jr nz,find_door
+    ret
+test_door_key:
+    ld a,(access_keys)
+    and (iy+actor_arg)
+    jr nz,unlock_door
+    ld a,5
     jp set_hint
 unlock_door:
-    ld a,(door_index)
-    ld l,a
-    ld h,live_map/256
-    xor a
-    ld (hl),a
-    inc a
-    ld (door_open),a
+    ld (iy+actor_hp),0
+    ld l,(iy+actor_x+1)
+    ld a,(iy+actor_y+1)
+    add a,live_map/256
+    ld h,a
+    ld (hl),0
+    ld a,(iy+actor_arg)
+    and 8
+    rrca
+    rrca
+    push af
     ld e,155
     call event_tone
-    ld a,2
+    pop af
     jp set_hint
 
 fire_shot:
@@ -243,7 +325,7 @@ fire_shot:
     ld a,(hl)
     cp c
     jr nc,consume_round
-    ld a,4
+    ld a,3
     jp set_hint
 consume_round:
     sub c
@@ -252,10 +334,8 @@ consume_round:
     ld (flash),a
     call play_shot_sound
     call mark_dirty
-    ld a,(enemy_hp)
-    ld hl,enemy_brute
-    or (hl)
-    ret z
+    ld a,&ff
+    ld (ignored_actor),a
     call facing_vector
     ld (line_dx),bc
     ld (line_dy),de
@@ -277,13 +357,8 @@ configure_shot:
 shot_step:
     call advance_line
     ret nz                         ; terrain blocks the shot first
-    ld iy,enemy_hp
-    ld ix,enemy_x
     ld a,(shot_width)
-    call test_first_actor
-    jr z,damage_enemy
-    ld a,(shot_width)
-    call test_second_actor
+    call find_enemy
     jr z,damage_enemy
     ld hl,line_count
     dec (hl)
@@ -291,28 +366,15 @@ shot_step:
     ret
 damage_enemy:
     dec (iy+actor_hp)
-    jr z,enemy_defeated
+    ret z
     ld a,(weapon)
     or a
     jr z,enemy_stagger
     dec (iy+actor_hp)
-    jr z,enemy_defeated
+    ret z
 enemy_stagger:
     ld (iy+actor_wait),4
     ret
-enemy_defeated:
-    ld a,(enemy_hp)
-    ld hl,enemy_brute
-    or (hl)
-    ret nz
-    ld a,(key_waiting)
-    or a
-    ld a,1
-    jr z,show_next_objective
-    ld a,6
-show_next_objective:
-    jp set_hint
-
 enemy_tick:
     ld a,(iy+actor_hp)
     or a
@@ -345,6 +407,9 @@ reach_ready:
     call near_point
     jr nz,chase_player
     ld (iy+actor_wait),10
+    ld a,(damage_phase)
+    or a
+    ret nz                        ; simultaneous melee attacks share the impact window
     call start_damage_feedback
     ld hl,life
     dec (hl)
@@ -383,26 +448,22 @@ chase_y:
 actor_step_clear:
     call box_clear
     ret nz
-    call test_actor_kind
-    ld ix,enemy_x
-    jr nz,test_peer
-    ld ix,enemy_brute+actor_x
-test_peer:
-    ld a,(ix-1)
-    or a
-    ret z
+    push iy
+    pop bc
+    ld a,c
+    ld (ignored_actor),a
+    push iy
     ld a,82
-    call near_point
+    call find_enemy
+    pop iy
     jp z,actor_blocks
     xor a
     ret
 
 ; Z for the standard monster. IY and the position registers survive.
 test_actor_kind:
-    push iy
-    pop bc
-    ld a,c
-    cp enemy_hp & 255
+    ld a,(iy+actor_kind)
+    or a
     ret
 
 actor_position:
@@ -599,6 +660,6 @@ show_flash:
     or a
     ld a,209
     jr z,write_flash
-    ld a,135
+    ld a,159
 write_flash:
     jp WRTVRM

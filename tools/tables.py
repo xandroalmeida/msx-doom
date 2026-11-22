@@ -2,63 +2,9 @@
 
 from math import cos, pi, sin
 
-SECTORS = (
-    (
-        "################",
-        "##.......#######",
-        "##........######",
-        "##...E.....#####",
-        "##.........#####",
-        "#####D##########",
-        "#..+...+.......#",
-        "#..#...#...##..#",
-        "#....M.+...##..#",
-        "#..............#",
-        "#..#+..#+......#",
-        "#..#+A.#+......#",
-        "#....P.........#",
-        "#.....#.....+..#",
-        "#.....#.....+..#",
-        "################",
-    ),
-    (
-        "################",
-        "#######.......##",
-        "#######.......##",
-        "#######...E...##",
-        "#######.......##",
-        "##########D#####",
-        "#.....##.......#",
-        "#..+...+..K....#",
-        "#..M.....B.....#",
-        "#..............#",
-        "#....++.....++.#",
-        "#..A.#....###..#",
-        "#..P.#.........#",
-        "#.....##.......#",
-        "#..............#",
-        "################",
-    ),
-    (
-        "################",
-        "##.....#########",
-        "##..E..#########",
-        "##.....#########",
-        "####D###########",
-        "#..............#",
-        "#......##......#",
-        "#...K..##......#",
-        "#..+........+..#",
-        "#....M.....B...#",
-        "#..++.....+.+..#",
-        "#......#.......#",
-        "#......#...A...#",
-        "#..........P...#",
-        "#..............#",
-        "################",
-    ),
-)
-RAY_LIMIT = 160
+from levels import sector_data
+
+RAY_LIMIT = 224
 MAX_LIFE = 5
 TERRAIN = (
     (".", "CHAO LIVRE", None),
@@ -90,14 +36,14 @@ OFFSET_STONE_ROWS = (
     (0b00111100, 0, 3),
 )
 CORNER_ROWS = (
-    (0b11100110, 2, 3),
-    (0b01100100, 1, 3),
-    (0b00100110, 2, 3),
-    (0b00100010, 0, 3),
-    (0b11100111, 2, 3),
-    (0b01100101, 1, 3),
-    (0b10100100, 1, 3),
-    (0b00100110, 0, 3),
+    (0b01101110, 1, 0),
+    (0b00100100, 0, 1),
+    (0b00101010, 1, 0),
+    (0b01110100, 0, 3),
+    (0b11010111, 1, 0),
+    (0b11000101, 1, 0),
+    (0b01101000, 0, 1),
+    (0b11010111, 0, 3),
 )
 
 
@@ -105,35 +51,42 @@ def stone_rows(rows, palette):
     return tuple((mask, (palette[light] << 4) | palette[shade]) for mask, light, shade in rows)
 
 
-# Each hex pair is a row of a handmade 5x7 glyph.
+# Umbra's six-pixel terminal font. Beveled corners and heavy stems read on CRT.
+# Each hex pair encodes one scanline.
 FONT = {
-    "A": "0e11111f111111",
-    "B": "1e11111e11111e",
-    "C": "0e11101010110e",
-    "D": "1e11111111111e",
-    "E": "1f10101e10101f",
-    "F": "1f10101e101010",
-    "G": "0e11101711110e",
-    "H": "1111111f111111",
-    "I": "0e04040404040e",
-    "J": "0702020212120c",
-    "L": "1010101010101f",
-    "M": "111b1515111111",
-    "N": "11191915131311",
-    "O": "0e11111111110e",
-    "P": "1e11111e101010",
-    "Q": "0e11111115120d",
-    "R": "1e11111e141211",
-    "S": "0f10100e01011e",
-    "T": "1f040404040404",
-    "U": "1111111111110e",
-    "V": "11111111110a04",
-    "X": "11110a040a1111",
-    "Z": "1f01020408101f",
-    "/": "01020204080810",
-    "0": "0e11131519110e",
-    "1": "040c040404040e",
-    "7": "1f010204080808",
+    "A": "0c1e33333f3333",
+    "B": "3c36363e33333e",
+    "C": "1f30303030301f",
+    "D": "3c36333333363c",
+    "E": "3f30303c30303f",
+    "F": "3f30303c303030",
+    "G": "1f30303733331f",
+    "H": "3333333f333333",
+    "I": "1e0c0c0c0c0c1e",
+    "J": "0f06060636361c",
+    "L": "3030303030303f",
+    "M": "21333f2d212121",
+    "N": "31393135273323",
+    "O": "1e33333333331e",
+    "P": "3e33333e303030",
+    "Q": "1e333333352e17",
+    "R": "3e33333e3c3633",
+    "S": "1f30301e03033e",
+    "T": "3f0c0c0c0c0c0c",
+    "U": "3333333333331e",
+    "V": "333333331e0c0c",
+    "X": "33331e0c1e3333",
+    "Z": "3f03060c18303f",
+    "0": "1e33373b33331e",
+    "1": "0c1c0c0c0c0c1e",
+    "2": "1e3303060c183f",
+    "3": "3e03031e03033e",
+    "4": "060e1e363f0606",
+    "5": "3f30303e03033e",
+    "6": "1f30303e33331e",
+    "7": "3f03060c181818",
+    "8": "1e33331e33331e",
+    "9": "1e33331f03033e",
 }
 
 # Original monochrome masks. Each size is converted to SCREEN 2 tiles separately.
@@ -256,61 +209,66 @@ def panel_data(field, rows):
     return data(field, (*blocks, 0))
 
 
-def level_data():
-    def point(index, x_fraction=128):
-        return (x_fraction, index & 15, 128, index >> 4)
+def sloped_caps(heights, walls, palettes, ceiling, floor, used_tiles):
+    """Assign sloped wall caps to tile IDs unused in their SCREEN 2 banks."""
+    available = [iter(sorted(set(range(256)) - used)) for used in used_tiles]
+    art, uploads, lookup = bytearray(), [], []
 
-    def reachable(world, start, door_open):
-        reached = {start}
-        frontier = [start]
-        while frontier:
-            current = frontier.pop()
-            for neighbor in (current - 16, current + 16, current - 1, current + 1):
-                if neighbor in reached or world[neighbor] in (("#", "+") if door_open else ("#", "+", "D")):
-                    continue
-                reached.add(neighbor)
-                frontier.append(neighbor)
-        return reached
+    def place(rows, outside_bank):
+        art.extend(pattern for pattern, _ in rows)
+        art.extend(color for _, color in rows)
+        indices = []
+        for bank in (1, outside_bank):
+            index = next(available[bank], None)
+            if index is None:
+                raise ValueError(f"Sem tiles livres para as bordas no banco {bank}.")
+            uploads.append(index)
+            indices.append(index)
+        return indices
 
-    terrain = "".join(mark for mark, _, _ in TERRAIN)
-    maps, records = [], []
-    for index, rows in enumerate(SECTORS):
-        world = "".join(rows)
-        if (len(rows) != 16 or any(len(row) != 16 or row[0] not in "#+" or row[-1] not in "#+" for row in rows)
-                or set(rows[0] + rows[-1]) - set("#+")
-                or set(world) - set(terrain + "PMBAKE")
-                or any(world.count(mark) != 1 for mark in ("PMABKDE" if index else "PMADE"))
-                or (index == 0 and ("K" in world or "B" in world))):
-            raise ValueError(f"Terreno ou marcadores inválidos no setor {index + 1}.")
-        cells = {mark: world.index(mark) for mark in "PMBAKDE" if mark in world}
-        before = reachable(world, cells["P"], door_open=False)
-        after = reachable(world, cells["P"], door_open=True)
-        if any(cell not in before for mark, cell in cells.items() if mark not in "DE") or (
-            cells["E"] in before or cells["E"] not in after
-        ):
-            raise ValueError(f"Rota inválida no setor {index + 1}.")
-        codes = [terrain.index(mark) if mark in terrain else 0 for mark in world]
-        packed = [sum(codes[offset + i] << (6 - i * 2) for i in range(4))
-                  for offset in range(0, 256, 4)]
-        maps.append(data(f"sector_map_{index}", packed))
-        brute = (3 if index == 1 else 4, *point(cells["B"]), 0) if index else (0,) * 6
-        records.append("\n".join((
-            f"sector_{index}:",
-            f"    dw sector_map_{index}",
-            "    db " + ",".join(str(value) for value in (
-                *point(cells["P"]), 2, *point(cells["M"]), 0, *brute,
-                *point(cells["D"]), *point(cells["E"]), *point(cells["A"], 32),
-                *point(cells.get("K", 0)),              # unused when no key is required
-                cells["D"], (2, 5, 6)[index], int(index != 0),
-            )),
-        )))
-    pointers = data("sector_records", (f"sector_{i}" for i in range(len(SECTORS))), "dw")
-    return "\n".join((f"sector_count: equ {len(SECTORS)}", pointers, *records, *maps))
+    for rise in (2, 4):
+        for material, ((wall, _, _, _), (shade, mid, _, _)) in enumerate(zip(walls, palettes)):
+            for side in range(2):
+                middle, outside = [], []
+                for clip in range(0, 8, 2):
+                    if clip + rise > 8:
+                        offset = material * 32 + side * 16 + clip
+                        middle.extend(lookup[offset:offset + 2])
+                        outside.extend(lookup[offset + 8:offset + 10])
+                        continue
+                    # Color zero outside the wall shows the game backdrop and damage flash.
+                    widths = (3, 6) if rise == 2 else (2, 4, 6, 7)
+                    masks = [(1 << width) - 1 if side == 0 else 0xFF << (8 - width) & 0xFF
+                             for width in widths]
+                    upper_edge = [(mask, (mid if i % 2 == 0 else shade) << 4)
+                                  for i, mask in enumerate(masks)]
+                    lower_edge = [(mask, (mid if i % 2 == 0 else shade) << 4)
+                                  for i, mask in enumerate(reversed(masks))]
+                    upper = ceiling[:clip] + upper_edge + list(wall[clip + rise:])
+                    bottom = list(wall[:8 - clip - rise]) + lower_edge + floor[8 - clip:]
+                    top_ids, bottom_ids = place(upper, 0), place(bottom, 2)
+                    middle.extend((top_ids[0], bottom_ids[0]))
+                    outside.extend((top_ids[1], bottom_ids[1]))
+                lookup.extend(middle + outside)
+
+    tops = [64 - height for height in heights]
+    return (
+        f"wall_height_count: equ {len(heights)}",
+        f"slope_tile_count: equ {len(uploads) // 2}",
+        data("slope_sizes", heights),
+        data("slope_profiles", (
+            (top // 8 << 4) | (8 if top < 32 else 0) | (top & 7) for top in tops
+        )),
+        data("slope_tiles", lookup),
+        data("slope_art", art),
+        data("slope_uploads", uploads),
+    )
 
 
 def generate():
     patterns, colors = bytearray(), bytearray()
     tile_ids = {}
+    used_tiles = [set() for _ in range(3)]
 
     def tile(rows):
         rows = tuple(rows)
@@ -320,17 +278,24 @@ def generate():
             colors.extend(color for _, color in rows)
         return tile_ids[rows]
 
+    def panel(field, rows):
+        for row, _, tiles in rows:
+            used_tiles[(row + 4) // 8].update(tiles)
+        return panel_data(field, rows)
+
     blank = tile([(0, 0x11)] * 8)
-    stripe = tile([(0, 0x11)] * 6 + [(0, 0x77), (0, 0x11)])
     # Transparent ground/ceiling pixels normally show the black backdrop.
     # When the player takes damage they show the red VDP backdrop instead.
     ceiling = [(0, 0x00)] * 8
     floor = [(0x22 if y % 2 else 0x88, 0x40) for y in range(8)]
-    terrain_tiles = [tile(floor)]
+    floor_tile = tile(floor)
+    ceiling_tile = tile(ceiling)
+    terrain_tiles = [floor_tile]
 
-    # Two-pixel clipping leaves room in the tile bank for both corner styles.
+    # Two-pixel height increments bound the number of wall cap profiles.
     heights = [min(64, 2 * round(355 / (2 * n))) for n in range(1, RAY_LIMIT + 2)]
     wall_heights = sorted(set(heights))
+    style_offsets = [i * len(wall_heights) for i in (0, 0, 1, 2, 0, 3, 4, 2)]
     templates = []
     door = [(0xFE, 0xD4), (0xBA, 0xD4)] + [(0x7E, 0xD4)] * 5 + [(0x7E, 0xF4)]
     stone_palettes = [palette for _, _, palette in TERRAIN if palette is not None]
@@ -339,27 +304,38 @@ def generate():
         for palette in stone_palettes
     ]
     walls.append((door, None, None, 0))
-    corners = [(stone_rows(CORNER_ROWS, palette), None, palette, 0xE7) for palette in stone_palettes]
+    corners = [(stone_rows(CORNER_ROWS, palette), None, palette, 0xEF) for palette in stone_palettes]
     terrain_tiles.extend(tile(wall) for wall, _, _, _ in walls)
+    mini_terrain = [tile([(bits, 0x41) for bits in (0x88, 0, 0, 0, 0x88, 0, 0, 0)])]
+    for border, center in ((4, 5), (10, 11), (13, 13)):
+        mini_terrain.append(tile([
+            (0, 0x11), (0x7e, border << 4 | 1),
+            *((0x42, border << 4 | center),) * 4,
+            (0x7e, border << 4 | 1), (0, 0x11),
+        ]))
+    if len(terrain_tiles) + len(mini_terrain) + len(style_offsets) + len(heights) > 256:
+        raise ValueError("As tabelas de material e profundidade devem caber na mesma página.")
     for wall, alternate, palette, rim in walls + corners:
         for half_height in wall_heights:
             top, bottom = 64 - half_height, 64 + half_height - 1
             column = ceiling * 8 + floor * 8
             column[top:bottom + 1] = [wall[y % 8] for y in range(top, bottom + 1)]
             if palette is not None and half_height < 64:
-                shade, _, light, grout = palette
-                column[top] = (rim, (light << 4) | grout)
-                column[bottom] = (rim, (shade << 4) | grout)
+                shade, mid, _, _ = palette
+                column[top] = (rim, (mid << 4) | shade)
+                column[bottom] = (rim, (shade << 4) | mid)
             for y in range(0, 128, 8):
                 rows = column[y:y + 8]
                 if alternate and y % 16 and top < y and y + 7 < bottom:
                     rows = alternate
-                templates.append(tile(rows))
+                index = tile(rows)
+                templates.append(index)
+                used_tiles[(y // 8 + 4) // 8].add(index)
 
     def label(text, accent):
         return [
             blank if char == " " else tile(
-                [(row << 2, (accent << 4) | 1) for row in bytes.fromhex(FONT[char])]
+                [(row << 1, (accent << 4) | 1) for row in bytes.fromhex(FONT[char])]
                 + [(0, 0x11)]
             )
             for char in text
@@ -386,6 +362,8 @@ def generate():
         return [index for size in range(1, 5) for index in object_tiles(mask, color, size)]
 
     objects = [(kind, name, object_art(mask, color)) for kind, name, mask, color in OBJECT_ART]
+    # Projected objects occupy viewport rows 6–9, all in the middle SCREEN 2 bank.
+    used_tiles[1].update(index for _, _, art in objects for index in art)
 
     door_passage = tile([(0x81, 0xd1)] * 8)
     arrow = (
@@ -415,25 +393,22 @@ def generate():
     def marker_row(name, icon):
         return [icon, blank, *label(name, 15)]
 
-    legend_panel = panel_data("legend_panel", [
-        (1, 2, label("LEGENDA", 7)),
+    heart_full = tile([(bits, 0x91) for bits in (0, 0x66, 0xff, 0xff, 0x7e, 0x3c, 0x18, 0)])
+    legend_panel = panel("legend_panel", [
+        (1, 2, label("LEGENDA", 15)),
         (3, 2, label("TERRENO", 11)),
         (3, 20, label("OBJETOS", 11)),
         *((5 + index * 2, 2, marker_row(name, icon))
           for index, (name, icon) in enumerate(terrain_legend)),
         *((5 + index * 2, 20, marker_row(name, icon))
           for index, (_, name, icon) in enumerate(markers)),
-    ])
-    map_panel = panel_data("map_panel", [
-        (1, 20, label("MAPA", 7)),
-        (3, 20, [directions[0], blank, *label("NORTE", 11)]),
-        *((5 + index * 2, 20, marker_row(name, icon))
-          for index, (_, name, icon) in enumerate(markers)),
+        (15, 2, marker_row("CURA", heart_full)),
     ])
     menu_hud = label(" ESQ LEGENDA DIR MAPA M VOLTAR ".ljust(32), 15)
+    map_hud = label(" ESQ LEGENDA  SUBIR DESCER  M".ljust(32), 15)
 
     def story_panel(field, title, detail, action, accent=7):
-        return panel_data(field, [
+        return panel(field, [
             (3, (32 - len(title)) // 2, label(title, accent)),
             (7, (32 - len(detail)) // 2, label(detail, 15)),
             (12, (32 - len(action)) // 2, label(action, 11)),
@@ -445,46 +420,43 @@ def generate():
         story_panel("last_panel", "POSTO RECUPERADO", "CAMPANHA CONCLUIDA", "ESP VOLTAR AO INICIO", 7),
         story_panel("title_panel", "POSTO UMBRA", "SINAL DE UMBRA", "ESP INICIAR CAMPANHA", 7),
     )
-    chrome = [blank] * (24 * 32)
-
-    def write_chrome(row, col, tiles):
-        offset = row * 32 + col
-        chrome[offset:offset + len(tiles)] = tiles
-
-    write_chrome(1, 2, label("POSTO UMBRA", 7))
-    write_chrome(1, 22, label("SETOR 01", 11))
-    write_chrome(2, 2, [stripe] * 28)
-    write_chrome(20, 2, [stripe] * 28)
-    write_chrome(23, 2, label("ESP TIRO  SHIFT ABRIR  M MENU", 15))
     meter_idle = tile([(bits, 0x41) for bits in (0, 0, 0, 0x7e, 0x7e, 0, 0, 0)])
     meter_active = tile([(bits, 0x71) for bits in (0, 0, 0x7e, 0x7e, 0x7e, 0x7e, 0, 0)])
-    heart_full = tile([(bits, 0x91) for bits in (0, 0x66, 0xff, 0xff, 0x7e, 0x3c, 0x18, 0)])
     heart_empty = tile([(bits, 0xe1) for bits in (0, 0x66, 0x99, 0x81, 0x42, 0x24, 0x18, 0)])
-    life_label = label(" VIDA ", 15)
-    hud = life_label + [heart_full] * MAX_LIFE + label(" MUN ", 15)
+    ammo_icon = next(art[0] for kind, _, art in objects if kind == "ammo")
+    hud = [blank] + [heart_full] * MAX_LIFE + [blank, ammo_icon]
     ammo_offset = len(hud)
-    hint_offset = ammo_offset + 3
+    hud += [blank] * 3
+    weapon_offset = len(hud)
+    hud += [blank] * 7 + label(" S", 7)
+    sector_offset = len(hud)
+    hud += [blank] * 2
+    hint_offset = len(hud)
     hint_width = 32 - hint_offset
-    hud.extend([blank] * (32 - len(hud)))
+    hud.extend([blank] * hint_width)
     weapons = label("PISTOLAPULSO  ", 7)
-    digits = [
-        tile([(row << 2, 0xf1) for row in bytes.fromhex(glyph)] + [(0, 0x11)])
-        for glyph in (
-            "0e11131519110e", "040c040404040e", "0e11010204081f", "1e01010e01011e",
-            "02060a121f0202", "1f10101e01011e", "0608101e11110e", "1f010204080808",
-            "0e11110e11110e", "0e11110f01020c",
-        )
-    ]
+    digits = label("0123456789", 15)
     hints = (
-        "DERROTE TODOS", "ABRA A PORTA", "ACHE A SAIDA", "PORTA SELADA",
-        "SEM MUNICAO", "MUNICAO EXTRA", "ACHE A CHAVE",
+        "ACHE CHAVE", "ABRA PORTA", "ACHE SAIDA", "SEM MUN",
+        "MUN EXTRA", "TRANCADA", "CURA EXTRA",
     )
     if any(len(message) > hint_width for message in hints):
         raise ValueError("Mensagem de objetivo excede a largura disponível no HUD.")
     hint_labels = [f"hud_hint_{index}" for index in range(len(hints))]
-    hint_rows = [data(name, label(message.ljust(hint_width), 11)) for name, message in zip(hint_labels, hints)]
+    hint_tiles = [label(message.ljust(hint_width), 11) for message in hints]
+    hint_rows = [data(name, tiles) for name, tiles in zip(hint_labels, hint_tiles)]
     if len(tile_ids) > 256:
         raise ValueError("SCREEN 2 admite até 256 tiles por banco.")
+
+    common_tiles = {blank, heart_full, door_passage, *directions, *terrain_tiles,
+                    *(icon for _, _, icon in markers)}
+    for bank in used_tiles:
+        bank.update(common_tiles)
+    used_tiles[0].update([ceiling_tile, *mini_terrain])
+    used_tiles[1].update((meter_idle, meter_active))
+    used_tiles[2].update(menu_hud + map_hud + hud + weapons + digits + [heart_empty])
+    used_tiles[2].update(index for hint in hint_tiles for index in hint)
+    caps = sloped_caps(wall_heights, walls, stone_palettes, ceiling, floor, used_tiles)
 
     walk_vectors, ray_vectors, camera_vectors = [], [], []
     for heading in range(64):
@@ -503,23 +475,29 @@ def generate():
         data("tile_patterns", patterns),
         "tile_patterns_end:",
         data("tile_colors", colors),
-        data("chrome", chrome),
+        f"ceiling_tile: equ {ceiling_tile}",
+        f"floor_tile: equ {floor_tile}",
         data("walk_vectors", walk_vectors, "dw"),
         data("ray_vectors", ray_vectors),
         data("camera_vectors", camera_vectors),
         "ray_limit: equ " + str(RAY_LIMIT),
-        data("heights", (wall_heights.index(height) for height in heights)),
         data("wall_columns", templates),
         "    ds align 256",
         data("terrain_tiles", terrain_tiles),
+        data("mini_terrain", mini_terrain),
         # Index by material plus 4 for a corner. Doors use the same style in both cases.
-        data("wall_styles", (i * len(wall_heights) for i in (0, 0, 1, 2, 0, 3, 4, 2))),
+        data("wall_styles", style_offsets),
+        # The aligned terrain lookup and this depth lookup share a ROM page.
+        data("heights", (wall_heights.index(height) for height in heights)),
+        *caps,
         *(data(f"{kind}_tiles", art) for kind, _, art in objects),
         data("object_depths", (distance * 4 // 9 for distance in range(182))),
         data("object_offsets", (0, 1, 5, 14)),
         data("hud_template", hud),
         f"max_life: equ {MAX_LIFE}",
-        f"hud_life_offset: equ {len(life_label)}",
+        "hud_life_offset: equ 1",
+        f"hud_weapon_offset: equ {weapon_offset}",
+        f"hud_sector_offset: equ {sector_offset}",
         f"hud_ammo_offset: equ {ammo_offset}",
         f"hud_hint_offset: equ {hint_offset}",
         f"hud_hint_width: equ {hint_width}",
@@ -531,12 +509,18 @@ def generate():
         *campaign_panels,
         data("campaign_panels", ("death_panel", "clear_panel", "last_panel", "title_panel"), "dw"),
         legend_panel,
-        map_panel,
         data("menu_hud", menu_hud),
+        data("map_hud", map_hud),
         data("map_arrows", directions),
         f"map_open_door: equ {door_passage}",
         *(f"map_{kind}: equ {icon}" for kind, _, icon in markers if kind != "player"),
-        level_data(),
+        data("medic_tiles", (
+            heart_full if cell == (size // 2) * (size + 1) else blank
+            for size in range(1, 5) for cell in range(size * size)
+        )),
+        data("prop_art", ("ammo_tiles", "medic_tiles", "key_tiles", 0, "exit_tiles"), "dw"),
+        data("prop_icons", ("map_ammo", heart_full, "map_key", "map_open_door", "map_exit")),
+        sector_data(data),
         f"intro_meter_idle: equ {meter_idle}",
         f"intro_meter_active: equ {meter_active}",
         "",

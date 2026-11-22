@@ -1,23 +1,20 @@
 ; The title owns all three PSG channels. It updates once per hardware tick.
 IDBYT1:     equ &002b
-intro_last: equ &c22c
-intro_rate: equ &c22d
-intro_phase: equ &c22e
-intro_gate: equ &c22f
-intro_order_position: equ &c230
-intro_score_position: equ &c232
-intro_left: equ &c234
-intro_io:   equ &c235
-intro_vol_a: equ &c236
-intro_vol_b: equ &c237
-intro_vol_c: equ &c238
-intro_drum:  equ &c239
-intro_meter: equ &c2e8             ; 24 bytes, above the game object queue
+intro_last: equ &f12c
+intro_rate: equ &f12d
+intro_phase: equ &f12e
+intro_gate: equ &f12f
+intro_order_position: equ &f130
+intro_score_position: equ &f132
+intro_left: equ &f134
+intro_io:   equ &f135
+intro_vol_a: equ &f136
+intro_vol_b: equ &f137
+intro_vol_c: equ &f138
+intro_drum:  equ &f139
+intro_meter: equ &f1e8             ; 24 bytes, above the game object queue
 
 intro_start:
-    ld hl,chrome                   ; the first chrome row is blank
-    ld de,chrome
-    call intro_chrome
     ld a,(IDBYT1)
     add a,a                       ; bit 7 marks the 50 Hz BIOS
     ld a,5
@@ -45,32 +42,7 @@ intro_stop:
     ld a,10
     call intro_psg
     ld a,&3f
-    call intro_mixer
-    ld hl,chrome+32
-    ld de,chrome+23*32
-    call intro_chrome
-    call show_sector_number
-    jp show_weapon_name
-
-; Update the header and footer of both name tables only on title transitions.
-intro_chrome:
-    push de
-    ld de,&1820
-    call intro_chrome_row
-    pop hl
-    ld de,&1ae0
-intro_chrome_row:
-    push de
-    push hl
-    ld bc,32
-    call LDIRVM
-    pop hl
-    pop de
-    ld a,d
-    add a,4
-    ld d,a
-    ld bc,32
-    jp LDIRVM
+    jp intro_mixer
 
 intro_tick:
     ld a,(outcome)

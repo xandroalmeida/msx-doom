@@ -1,7 +1,8 @@
 ; The game simulation stops while either tab is open.
-map_inset: equ 2
 
 toggle_menu:
+    xor a
+    ld (shot_repeat),a
     ld a,(menu_state)
     or a
     ld a,0
@@ -16,16 +17,56 @@ menu_tick:
     cp 3                          ; right: map
     jr z,select_map
     cp 7                          ; left: legend
-    ret nz
+    jr nz,scroll_map
     ld a,1
     jr change_tab
 select_map:
+    ld a,(menu_state)
+    cp 2
+    ret z
+    ld a,(player_y+1)
+    sub 8
+    ld c,map_height-16
+    call clamp_map_origin
+    ld (map_top),a
     ld a,2
 change_tab:
     ld hl,menu_state
     cp (hl)
     ret z
     jr select_menu
+
+clamp_map_origin:
+    jr nc,map_limit
+    xor a
+map_limit:
+    cp c
+    ret c
+    ld a,c
+    ret
+
+scroll_map:
+    ld b,a
+    ld a,(menu_state)
+    cp 2
+    ret nz
+    ld a,b
+    ld hl,map_top
+    cp 1                          ; north
+    jr nz,scroll_down
+    ld a,(hl)
+    or a
+    ret z
+    dec (hl)
+    jp mark_dirty
+scroll_down:
+    cp 5                          ; south
+    ret nz
+    ld a,(hl)
+    cp map_height-16
+    ret nc
+    inc (hl)
+    jp mark_dirty
 
 ; Terminate the sprite list while the panel occupies the viewport.
 show_game_sprites:
@@ -41,7 +82,12 @@ write_first_sprite:
 
 render_menu:
     call clear_view
+    ld a,(menu_state)
+    dec a
     ld hl,menu_hud
+    jr z,copy_menu_hud
+    ld hl,map_hud
+copy_menu_hud:
     ld de,hud
     ld bc,32
     ldir
@@ -49,15 +95,13 @@ render_menu:
     dec a
     ld hl,legend_panel
     jp z,draw_panel
-    call draw_map
-    ld hl,map_panel
-    jr draw_panel
+    jp draw_map
 
 clear_view:
-    ld hl,view
+    ld hl,frame
     ld (hl),0                     ; tile zero is blank
-    ld de,view+1
-    ld bc,view_size-1
+    ld de,frame+1
+    ld bc,frame_size-1
     ldir
     ret
 
@@ -77,71 +121,117 @@ draw_panel:
     ldir
     jr draw_panel
 
+draw_minimap:
+    ld a,(player_x+1)
+    sub 3
+    ld c,map_width-7
+    call clamp_map_origin
+    ld (map_left),a
+    ld a,(player_y+1)
+    sub 2
+    ld c,map_height-5
+    call clamp_map_origin
+    ld (map_top),a
+    ld hl,frame+32+24            ; top-right, inset by one tile
+    ld bc,5*256+7
+    ld a,mini_terrain-terrain_tiles
+    jr draw_map_area
 draw_map:
-    ld ix,live_map
-    ld de,view+map_inset
-    ld b,16
+    xor a
+    ld (map_left),a
+    ld hl,view
+    ld bc,16*256+32
+draw_map_area:
+    ld (map_palette),a
+    ld (map_dst),hl
+    ld (map_cols),bc
+    ex de,hl
+    ld a,(map_top)
+    add a,live_map/256
+    ld h,a
+    ld a,(map_left)
+    ld l,a
+    push hl
+    pop ix
 map_row:
-    ld c,16
-map_square:
-    ld l,(ix+0)
+    push bc
+    push ix
+    push de
+    ld a,(map_palette)
+    ld b,a
     ld h,terrain_tiles/256        ; page-aligned terrain lookup
+map_square:
+    ld a,(ix+0)
+    add a,b
+    ld l,a
     ld a,(hl)
     ld (de),a
     inc ix
     inc de
     dec c
     jr nz,map_square
+    pop de
+    pop ix
+    ld bc,256
+    add ix,bc
     ld a,e
-    add a,16
+    add a,32
     ld e,a
     jr nc,map_next_row
     inc d
 map_next_row:
+    pop bc
     djnz map_row
 
-    ld a,(door_open)
+    ld a,(map_palette)
     or a
-    jr z,map_exit_marker
-    ld a,(door_index)
+    jr nz,map_player_marker       ; the live minimap shows terrain and the player
+    ld iy,props
+map_props:
+    call map_prop
+    call next_prop
+    jr nz,map_props
+    ld iy,enemies
+map_enemies:
+    call map_enemy
+    call next_enemy
+    jr nz,map_enemies
+    jr map_player_marker
+
+map_prop:
+    ld a,(iy+actor_kind)
+    cp prop_door
+    jr nz,map_pickup
+    ld a,(iy+actor_hp)
+    or a
+    ret nz                        ; closed door is already in the terrain
     ld c,map_open_door
-    call plot_map
-map_exit_marker:
-    ld hl,exit_point+1
-    ld a,(exit_point+3)
-    ld c,map_exit
-    call plot_position
-    ld a,(supplies)
+    jr plot_entity
+map_pickup:
+    ld a,(iy+actor_hp)
     or a
-    jr z,map_key_marker
-    ld hl,ammo_point+1
-    ld a,(ammo_point+3)
-    ld c,map_ammo
-    call plot_position
-map_key_marker:
-    ld a,(key_waiting)
+    ret z
+    ld e,(iy+actor_kind)
+    ld d,0
+    ld hl,prop_icons
+    add hl,de
+    ld c,(hl)
+    jr plot_entity
+
+map_enemy:
+    ld a,(iy+actor_hp)
     or a
-    jr z,map_enemy_marker
-    ld hl,key_point+1
-    ld a,(key_point+3)
-    ld c,map_key
-    call plot_position
-map_enemy_marker:
-    ld a,(enemy_hp)
-    or a
-    jr z,map_brute_marker
+    ret z
     ld c,map_creature
-    ld hl,enemy_x+1
-    ld a,(enemy_y+1)
-    call plot_position
-map_brute_marker:
-    ld a,(enemy_brute+actor_hp)
+    ld a,(iy+actor_kind)
     or a
-    jr z,map_player_marker
+    jr z,plot_entity
     ld c,map_brute
-    ld hl,enemy_brute+actor_x+1
-    ld a,(enemy_brute+actor_y+1)
-    call plot_position
+plot_entity:
+    ld e,(iy+actor_x+1)
+    ld a,(iy+actor_y+1)
+    jr plot_position
+
 map_player_marker:
     ld a,(heading)
     add a,8
@@ -155,32 +245,33 @@ map_player_marker:
     ld hl,map_arrows
     add hl,de
     ld c,(hl)
-    ld hl,player_x+1
+    ld a,(player_x+1)
+    ld e,a
     ld a,(player_y+1)
 plot_position:
-    call map_coordinates
-
-; A is the packed cell index and C is the tile. Player is drawn last.
-plot_map:
+    ld hl,map_top
+    sub (hl)
+    ld hl,map_rows
+    cp (hl)
+    ret nc
     ld b,a
-    and &0f
+    ld a,e
+    ld hl,map_left
+    sub (hl)
+    ld hl,map_cols
+    cp (hl)
+    ret nc
     ld e,a
     ld d,0
-    ld a,b
-    and &f0
-    ld l,a
-    ld h,d
+    ld h,0
+    ld l,b
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    add hl,hl
     add hl,hl
     add hl,de
-    ld de,view+map_inset
+    ld de,(map_dst)
     add hl,de
     ld (hl),c
-    ret
-
-map_coordinates:
-    rlca
-    rlca
-    rlca
-    rlca
-    or (hl)
     ret

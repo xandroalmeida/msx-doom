@@ -1,6 +1,12 @@
 # Posto Umbra
 
-FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores, dois tipos de inimigo, duas armas, chaves e uma saída final. O cartucho linear ocupa 16 KiB.
+FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores de 32 × 44 células, quatro portões por setor, 36 inimigos e duas armas. O cartucho linear ocupa 16 KiB.
+
+## Fases
+
+- **Depósito.** Pilhas de carga e corredores paralelos ligam a doca, a sala de bombas e o controle de evacuação.
+- **Fundição.** As chaves ficam nas salas a oeste e abrem portões no lado leste. Desvios pelos corredores de serviço dão acesso a suprimentos.
+- **Reator.** Três alas compridas, com passagens paralelas e galerias estreitas, ligam a entrada ao transmissor de superfície.
 
 ## Abertura
 
@@ -19,22 +25,26 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Começar, avançar de setor ou confirmar uma nova tentativa | Espaço | Botão A |
 | Avançar ou recuar | ↑ / ↓ | Cima / baixo |
 | Girar | ← / → | Esquerda / direita |
-| Atirar | Espaço | Botão A |
+| Atirar ou manter uma sequência de disparos | Espaço | Botão A |
 | Trocar de arma | X | B + cima |
 | Abrir a porta | Shift | Botão B |
 | Abrir ou fechar o menu de pausa | M | A + B |
+| Mostrar ou ocultar o minimapa durante a partida | N | B + baixo |
 | Alternar entre legenda e mapa | ← / → | Esquerda / direita |
+| Rolar o mapa de pausa | ↑ / ↓ | Cima / baixo |
 | Reiniciar o setor durante a partida | R | — |
 
-A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. A caixa amarela acrescenta quatro cargas. O bruto roxo aguenta mais disparos e se aproxima mais rápido que o monstro vermelho.
+A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. As caixas amarelas fornecem oito cargas, e os corações no cenário recuperam até dois pontos de vida. O bruto roxo aguenta mais disparos e se aproxima mais rápido que o monstro vermelho.
 
-Elimine os inimigos, encontre a chave nos setores 2 e 3, abra a porta e siga até o sinal verde. A vida e a munição inicial são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
+Encontre as quatro chaves de cada setor, abra os portões correspondentes e siga até o sinal verde. Você pode passar pelos inimigos ou enfrentá-los para alcançar as chaves e os suprimentos. A vida e a munição inicial são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
 
-No HUD, cada coração vermelho representa um ponto de vida. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
+A visão 3D ocupa 256 × 184 pixels. A última linha concentra os corações, a munição, a arma, o setor e a dica de objetivo em uma fonte pixel art inspirada em terminais. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
 
 ## Legenda e mapa
 
-**M** pausa na legenda. **→** mostra o mapa, **←** volta à legenda e **M** retoma a partida. A seta branca marca a posição e a direção cardinal mais próxima do olhar. O mapa acompanha a porta, os inimigos, a caixa de munição e a chave. Se a seta dividir a célula com outro marcador, a posição do jogador fica visível por cima.
+O minimapa no canto superior direito acompanha o jogador em tempo real. Mostra apenas o terreno, o estado das passagens e a seta da sua posição e direção. **N** alterna a exibição durante a partida. A preferência vale até desligar ou recarregar o cartucho.
+
+**M** pausa na legenda. **→** abre o mapa na altura do jogador, **↑/↓** mostram outras áreas, **←** volta à legenda e **M** retoma a partida. A seta branca indica a posição e a direção do jogador. O mapa mostra portões abertos e fechados, inimigos, munição, cura, chaves e a saída.
 
 Os símbolos da legenda e do mapa são gerados com os tiles da fase a partir de `TERRAIN` e `OBJECT_ART`. Ao mudar ou adicionar um tipo de terreno ou objeto visível, atualize esses registros e o teste. Para um novo objeto dinâmico, atualize também o desenho de marcadores no menu.
 
@@ -49,7 +59,7 @@ python -m pip install pyz80==1.3.0
 python tools/build.py
 ```
 
-O build valida a rota de cada setor, gera as tabelas e preenche a imagem até 16 KiB. A opção `--assembler caminho/pyz80.py` permite usar diretamente o script do montador.
+O build valida a ordem dos portões e a rota de cada setor, gera as tabelas e preenche a imagem até 16 KiB. A opção `--assembler caminho/pyz80.py` permite usar diretamente o script do montador.
 
 ## Repetir a validação
 
@@ -60,7 +70,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Os arquivos de captura são opcionais. O WAV é gravado a partir do áudio gerado pelo PSG emulado. O teste verifica o tempo do ciclo musical nos perfis de 50 e 60 Hz, a repetição, a retomada do título e a liberação dos canais para os efeitos da campanha. Em seguida, percorre os três setores e verifica armas, chave, porta, inimigos, derrota, reinício, mapa, os corações do HUD e o clarão de dano no cenário. Também verifica que o som de dano e o disparo podem tocar juntos. No primeiro segundo de avanço do setor 1 com o monstro vivo, a ROM apresentou 14 quadros a 60 Hz e 15 quadros a 50 Hz. A validação em um MSX1 físico ainda está pendente.
+Os arquivos de captura são opcionais. O WAV vem do PSG emulado. O teste verifica a música a 50 e 60 Hz, percorre a campanha com os controles do jogo e mede o tempo de navegação com os inimigos desativados. Uma arena separada verifica armas, tiros em sequência, oclusão, cura, derrota e os efeitos de dano. O teste do minimapa cobre os dois atalhos, movimento, direção e a ausência de ícones de itens e inimigos. A validação em um MSX1 físico ainda está pendente.
 
 ## Código
 
@@ -72,5 +82,6 @@ Os arquivos de captura são opcionais. O WAV é gravado a partir do áudio gerad
 - [Combate e interação](src/combat.z80)
 - [Projeção de objetos e HUD](src/objects.z80)
 - [Legenda e mapa](src/menu.z80)
-- [Mapas, arte e geração de dados](tools/tables.py)
+- [Mapas e validação das rotas](tools/levels.py)
+- [Arte e geração de tabelas](tools/tables.py)
 - [Teste automatizado no WebMSX](tests/webmsx.cjs)

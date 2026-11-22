@@ -15,64 +15,78 @@ BAKCLR:    equ &f3ea
 BDRCLR:    equ &f3eb
 RG7SAV:    equ &f3e6
 
-view:       equ &c000             ; 32 x 16 tile names
-player_x:   equ &c200             ; unsigned 8.8 world coordinates
-player_y:   equ &c202
-heading:    equ &c204             ; 64 directions, zero is north
-front_page: equ &c205             ; VDP R2, 6 = 1800h, 7 = 1c00h
-dirty:      equ &c206
-column:     equ &c207
-ray_cursor: equ &c208
-last_tick:  equ &c20a
-shown:      equ &c20b             ; increments after each page flip
-move_sign:  equ &c20c
-buttons:    equ &c20d
-pressed:    equ &c20e
-life:       equ &c20f
-ammo:       equ &c210
-enemy_hp:   equ &c211
-enemy_x:    equ &c212
-enemy_y:    equ &c214
-enemy_wait: equ &c216
-supplies:   equ &c217
-door_open:  equ &c218
-outcome:    equ &c219             ; 0 playing, 1 dead, 2 clear, 3 final, 4 title
-hint:       equ &c21a
-flash:      equ &c21b
-line_x:     equ &c21c
-line_y:     equ &c21e
-line_dx:    equ &c220
-line_dy:    equ &c222
-line_count: equ &c224
-menu_state: equ &c225             ; 0 game, 1 legend, 2 map
-sector:     equ &c226
-key_waiting: equ &c227
-effect_timer: equ &c228
-ray_quadrant: equ &c229
-weapon:       equ &c22a             ; 0 pistol, 1 pulse
-shot_width:   equ &c22b
-damage_started: equ &c23a
-damage_phase: equ &c23b            ; 0 inactive, 1 impact, 2 low tone
-normal_backdrop: equ &c23c
-enemy_brute: equ &c290            ; same layout as enemy_hp through enemy_wait
-door_point:  equ &c2a0
-exit_point:  equ &c2a4
-ammo_point:  equ &c2a8
-key_point:   equ &c2ac
-door_index:  equ &c2b0
-initial_ammo: equ &c2b1
-needs_key:    equ &c2b2
-
+frame:      equ &c080             ; complete name table, 32 x 24 tiles
+view:       equ &c100             ; aligned 16-row center of the scene
+state_page: equ &f100
+player_x:   equ &f100             ; unsigned 8.8 world coordinates
+player_y:   equ &f102
+heading:    equ &f104             ; 64 directions, zero is north
+front_page: equ &f105             ; VDP R2, 6 = 1800h, 7 = 1c00h
+dirty:      equ &f106
+column:     equ &f107
+ray_cursor: equ &f108
+last_tick:  equ &f10a
+shown:      equ &f10b             ; increments after each page flip
+move_sign:  equ &f10c
+buttons:    equ &f10d
+pressed:    equ &f10e
+life:       equ &f10f
+ammo:       equ &f110
+enemy_end:  equ &f111             ; low byte of the end of the enemy list
+prop_end:   equ &f112
+access_keys: equ &f113            ; one bit per key recovered in the sector
+actor_radius: equ &f114
+ignored_actor: equ &f115         ; low byte of the actor to skip in collision tests
+map_top:    equ &f116             ; first world row in the active map window
+shot_repeat: equ &f117            ; armed by a fresh trigger press
+map_left:   equ &f118
+outcome:    equ &f119             ; 0 playing, 1 dead, 2 clear, 3 final, 4 title
+hint:       equ &f11a
+flash:      equ &f11b
+line_x:     equ &f11c
+line_y:     equ &f11e
+line_dx:    equ &f120
+line_dy:    equ &f122
+line_count: equ &f124
+menu_state: equ &f125             ; 0 game, 1 legend, 2 map
+sector:     equ &f126
+minimap:    equ &f127             ; user preference for the current session
+effect_timer: equ &f128
+ray_quadrant: equ &f129
+weapon:       equ &f12a             ; 0 pistol, 1 pulse
+shot_width:   equ &f12b
+damage_started: equ &f13a
+damage_phase: equ &f13b            ; 0 inactive, 1 impact, 2 low tone
+normal_backdrop: equ &f13c
+cap_style:  equ &f13d
+cap_height: equ &f13e
+map_cols:   equ &f140
+map_rows:   equ &f141
+map_dst:    equ &f142
+map_palette: equ &f144
 actor_hp:   equ 0
 actor_x:    equ 1
 actor_y:    equ 3
 actor_wait: equ 5
-hud:        equ &c240             ; one row immediately below the viewport
-wall_depth: equ &c260             ; one distance per screen column
-wall_faces: equ object_queue      ; reused before the object pass
-live_map:   equ &c300             ; one aligned page for terrain and door
-view_size:  equ 512
+actor_kind: equ 6
+actor_arg:  equ 7
+entity_size: equ 8
+prop_ammo:  equ 0
+prop_medic: equ 1
+prop_key:   equ 2
+prop_door:  equ 3
+prop_exit:  equ 4
+hud:        equ frame+23*32       ; final row of both name tables
+wall_depth: equ &f160             ; one distance per screen column
+wall_faces: equ &f1c0
+wall_style: equ &f1e0             ; overlaps the title meters during gameplay
+live_map:   equ &c400             ; 32 cells per page, one page per row
+enemies:    equ live_map+32       ; unused bytes after the first terrain row
+props:      equ live_map+256+32   ; unused bytes after the second terrain row
+frame_size: equ 768
 radius:     equ 32
+near_ray_steps: equ 16
+far_ray_steps: equ (ray_limit-near_ray_steps)/2
 
     org &4000
     dump &4000
@@ -94,6 +108,8 @@ start:
     ld (shown),a
     ld (menu_state),a
     ld (sector),a
+    inc a
+    ld (minimap),a
     call reset_level
     call intro_start
     ld a,4
@@ -101,7 +117,7 @@ start:
     ld a,6
     ld (front_page),a
     call render_scene
-    ld de,&1880
+    ld de,&1800
     call copy_frame
     call show_game_sprites
     call ENASCR
@@ -136,7 +152,7 @@ tick_check:
     add a,a
     add a,a
     ld d,a
-    ld e,&80
+    ld e,0
     call copy_frame
     halt                           ; switch to the completed page at VBlank
     ld a,(front_page)
@@ -150,16 +166,8 @@ tick_check:
     jr tick_check
 
 copy_frame:
-    push de
-    ld hl,view
-    ld bc,view_size
-    call LDIRVM
-    pop de
-    inc d                         ; offset 2A0h = row 21
-    inc d
-    ld e,&a0
-    ld hl,hud
-    ld bc,32
+    ld hl,frame
+    ld bc,frame_size
     jp LDIRVM
 
 init_video:
@@ -181,14 +189,7 @@ init_video:
     ld hl,tile_colors
     ld de,&3000
     call upload_tile_bank
-    ld hl,chrome
-    ld de,&1800
-    ld bc,768
-    call LDIRVM
-    ld hl,chrome
-    ld de,&1c00
-    ld bc,768
-    call LDIRVM
+    call upload_slopes
     ld hl,sprite_patterns
     ld de,&3800
     ld bc,sprite_patterns_end-sprite_patterns
@@ -201,6 +202,66 @@ init_video:
 upload_tile_bank:
     ld bc,tile_patterns_end-tile_patterns
     jp LDIRVM
+
+upload_slopes:
+    ld hl,slope_uploads
+    ld de,slope_art
+    ld b,slope_tile_count
+upload_slope:
+    push bc
+    ld a,(hl)                     ; every silhouette tile has a middle-bank copy
+    inc hl
+    ld c,(hl)                     ; same art in the upper or lower bank
+    inc hl
+    push hl
+    push de
+    push bc
+    ld b,&08
+    call upload_slope_tile
+    pop bc
+    pop de
+    ld a,b                        ; even countdown: upper cap, odd: lower cap
+    and 1
+    rlca
+    rlca
+    rlca
+    rlca
+    ld b,a
+    ld a,c
+    push de
+    call upload_slope_tile
+    pop hl
+    ld de,16
+    add hl,de
+    ex de,hl
+    pop hl
+    pop bc
+    djnz upload_slope
+    ret
+
+; A: slot, B: high byte of bank base, DE: ROM art (eight pattern and eight color bytes).
+upload_slope_tile:
+    ld l,a
+    ld h,0
+    add hl,hl
+    add hl,hl
+    add hl,hl
+    ld a,h
+    or b
+    ld h,a
+    ex de,hl
+    push hl
+    push de
+    ld bc,8
+    call LDIRVM                    ; pattern bank
+    pop de
+    ld a,d
+    add a,&20
+    ld d,a
+    ld bc,8
+    pop hl
+    add hl,bc
+    jp LDIRVM                      ; color bank follows the pattern bank
 
 sprite_patterns:
     db &00,&10,&10,&6c,&10,&10,&00,&00
@@ -220,14 +281,14 @@ sprites:
     db 92,124,0,15
     db 209,124,5,11               ; muzzle flash, hidden until a shot
 pistol_sprite_body:
-    db 143,120,1,14, 143,128,2,14
-    db 151,120,3,14, 151,128,4,14
-    db 143,120,6,5, 143,128,7,5
+    db 167,120,1,14, 167,128,2,14
+    db 175,120,3,14, 175,128,4,14
+    db 167,120,6,5, 167,128,7,5
     db 208
 sprites_end:
 pulse_sprite_body:
-    db 143,120,8,7, 143,128,9,7
-    db 151,120,10,7, 151,128,11,7
+    db 167,120,8,7, 167,128,9,7
+    db 175,120,10,7, 175,128,11,7
 
 read_direction:
     xor a
@@ -370,18 +431,24 @@ box_done:
 
 cell:
     ld a,d
-    add a,a
-    add a,a
-    add a,a
-    add a,a
-    or h
-    ld c,a
-    ld b,live_map/256
+    add a,live_map/256
+    ld b,a
+    ld c,h
     ld a,(bc)
     or a
     ret
 
 render_view:
+    ld hl,frame
+    ld (hl),ceiling_tile
+    ld de,frame+1
+    ld bc,4*32-1
+    ldir
+    ld hl,view+16*32
+    ld (hl),floor_tile
+    ld de,view+16*32+1
+    ld bc,3*32-1
+    ldir
     ld a,(heading)
     and &30                       ; the other quadrants rotate the first 16 headings
     ld (ray_quadrant),a
@@ -441,43 +508,71 @@ extend_ray:
     exx
     pop de
     ld hl,(player_y)
-    ld b,live_map/256
+    ld a,h
+    add a,live_map/256            ; carry the RAM page in Y's integer byte
+    ld h,a
     exx
     ld hl,(player_x)
-    ld b,ray_limit
-march:
+    ld b,near_ray_steps
+march_near:
     add hl,de                    ; main registers hold X and dx
     ld a,h
     exx
     add hl,de                    ; alternate registers hold Y and dy
     ld c,a
-    ld a,h
-    add a,a
-    add a,a
-    add a,a
-    add a,a
-    or c
-    ld c,a
+    ld b,h
     ld a,(bc)
     exx
     or a
-    jr nz,wall_hit
-    djnz march
+    jr nz,near_wall_hit
+    djnz march_near
+
+    ; Take wider samples beyond the nearby walls. Even a doubled step
+    ; is shorter than a cell, and close silhouettes keep the finer spacing.
+    sla e
+    rl d
+    exx
+    sla e
+    rl d
+    exx
+    ld b,far_ray_steps
+march_far:
+    add hl,de
+    ld a,h
+    exx
+    add hl,de
+    ld c,a
+    ld b,h
+    ld a,(bc)
+    exx
+    or a
+    jr nz,far_wall_hit
+    djnz march_far
     ld a,1                       ; safety bound for an edited map
+    push af
+    ld a,ray_limit
+    jr wall_hit
+far_wall_hit:
+    push af
+    ld a,far_ray_steps
+    sub b
+    add a,a
+    add a,near_ray_steps+1
+    jr wall_hit
+near_wall_hit:
+    push af
+    ld a,near_ray_steps
+    sub b
 wall_hit:
+    ld b,a                       ; distance in normal ray steps
     ; Identify the plane of the hit, even when the last ray step crossed two cells.
-    push af                      ; material, starting at 1
     ld c,h                       ; hit X cell
     or a
     sbc hl,de                    ; X before the last step
     ld a,h
     cp c
     jr z,ray_y_face
-    exx
-    ld a,c                       ; hit cell's map index
-    and &f0
-    exx
-    or h
+    ld a,h
     exx
     ld c,a
     ld a,(bc)                    ; wall on the new Y row at the previous X
@@ -485,45 +580,55 @@ wall_hit:
     or a
     jr nz,ray_y_face
     ld a,c
-    or &10                       ; X face
+    or &40                       ; X face, distinct from all Y faces
     jr ray_face
 ray_y_face:
     exx
     ld a,h
     exx
+    sub live_map/256
 ray_face:
-    and &1f
     ld e,a
     pop af
-    rrca
-    rrca
-    rrca
-    or e
-    ld e,a                       ; material in bits 5-6, plane in bits 0-4
-
+    ld c,a                       ; material, with bit 2 available for the bevel
     ld a,(column)
-    add a,wall_depth-&c200
+    add a,wall_depth-state_page
     ld l,a
     ld h,wall_depth/256
-    ld a,ray_limit
-    sub b
+    ld a,b
     ld (hl),a
     ld d,a
     ld a,l
     add a,wall_faces-wall_depth
     ld l,a
     ld (hl),e
-    cp wall_faces-&c200
+    add a,wall_style-wall_faces
+    ld l,a
+    ld (hl),c
+    cp wall_style-state_page
     jr z,next_ray
 
     ; At a change of plane or material, bevel the nearer of the two columns.
     dec l
     ld a,(hl)
-    and &7f
-    cp e
-    jr z,next_ray
+    and 3
+    cp c
+    jr nz,edge_found
     ld a,l
-    sub wall_faces-wall_depth
+    sub wall_style-wall_faces
+    ld l,a
+    ld a,(hl)
+    cp e
+    jr nz,different_face
+    call mark_slope
+    jr next_ray
+different_face:
+    ld a,l
+    add a,wall_style-wall_faces
+    ld l,a
+edge_found:
+    ld a,l
+    sub wall_style-wall_depth
     ld l,a
     ld a,(hl)
     cp d
@@ -531,9 +636,9 @@ ray_face:
     jr c,mark_edge
     inc a
 mark_edge:
-    add a,wall_faces-wall_depth
+    add a,wall_style-wall_depth
     ld l,a
-    set 7,(hl)
+    set 2,(hl)
 next_ray:
     ld hl,column
     inc (hl)
@@ -545,25 +650,25 @@ next_ray:
     ld (column),a
 draw_wall:
     ld a,(column)
-    add a,wall_depth-&c200
+    add a,wall_depth-state_page
     ld l,a
     ld h,wall_depth/256
     ld e,(hl)
     ld d,0
-    add a,wall_faces-wall_depth
+    add a,wall_style-wall_depth
     ld l,a
     ld a,(hl)
-    rlca
-    rlca
-    rlca
-    and 7                        ; edge flag followed by the two material bits
+    ld (cap_style),a
+    and 7
     add a,wall_styles-terrain_tiles
     ld h,wall_styles/256
     ld l,a
     ld c,(hl)                    ; offset for the selected style
-    ld hl,heights
-    add hl,de
+    ld a,e
+    add a,heights-terrain_tiles
+    ld l,a
     ld a,(hl)
+    ld (cap_height),a
     add a,c
     ld h,0
     ld l,a
@@ -576,21 +681,192 @@ draw_wall:
     ld a,(column)
     ld e,a
     ld d,view/256
-    ld b,16
-draw_column:
-    ld a,(hl)
-    ld (de),a
-    inc hl
-    ld a,e
-    add a,32
-    ld e,a
-    jr nc,next_tile
-    inc d
-next_tile:
-    djnz draw_column
+    ex de,hl
+    ld bc,32
+    call draw_eight_tiles
+    call draw_eight_tiles
+    call draw_slope
+    call extend_wall
     ld hl,column
     inc (hl)
     ld a,(hl)
     cp 32
     jr nz,draw_wall
+    ret
+
+; Extend the nearest walls into the newly visible rows. The central tiles
+; already reach the top and bottom of their 128-pixel band at these depths.
+extend_wall:
+    ld a,(column)
+    ld e,a
+    add a,wall_depth-state_page
+    ld l,a
+    ld h,wall_depth/256
+    ld a,(hl)
+    cp 5
+    ret nc
+    ld l,e
+    ld h,view/256
+    ld c,(hl)
+    ld b,3
+    cp 4
+    jr nz,extend_top
+    ld b,1
+extend_top:
+    push bc
+    cp 3
+    jr nc,extend_up
+    inc b
+extend_up:
+    ld de,-32
+extend_up_one:
+    add hl,de
+    ld (hl),c
+    djnz extend_up_one
+    pop bc
+    ld a,(column)
+    ld l,a
+    ld h,(view+16*32)/256
+    ld de,32
+extend_down:
+    ld (hl),c
+    add hl,de
+    djnz extend_down
+    ret
+
+; HL is the previous face, C the material, D the current ray depth.
+; Only one continuous stone face may share a slope across the column boundary.
+mark_slope:
+    ld a,c
+    cp 3
+    ret z
+    ld a,l
+    sub wall_faces-wall_depth
+    ld l,a
+    ld a,(hl)
+    cp d
+    ret z
+    ld b,l
+    add a,heights-terrain_tiles
+    ld l,a
+    ld h,heights/256
+    ld c,(hl)                     ; previous height index
+    ld a,d
+    add a,heights-terrain_tiles
+    ld l,a
+    ld a,(hl)
+    cp c
+    ret z
+    ld e,a
+    ld d,0
+    ld hl,slope_sizes
+    add hl,de
+    ld a,(hl)
+    ld e,c
+    ld hl,slope_sizes
+    add hl,de
+    sub (hl)                      ; current minus previous projected height in pixels
+    ld c,&08                      ; current cap tapers toward the left
+    jr nc,slope_strength
+    neg
+    ld c,&18                      ; previous cap tapers toward the right
+    dec b
+slope_strength:
+    cp 4
+    jr c,store_slope
+    set 6,c
+store_slope:
+    ld a,b
+    add a,wall_style-wall_depth+1
+    ld l,a
+    ld h,wall_style/256
+    ld a,(hl)
+    and 7
+    or c
+    ld (hl),a
+    ret
+
+draw_slope:
+    ld a,(cap_style)
+    ld c,a
+    and &0c
+    cp &08                       ; preserve the bevel at discontinuous faces
+    ret nz
+    ld a,(cap_height)
+    cp wall_height_count-1       ; a wall that fills the screen has no visible cap
+    ret z
+    ld e,a
+    ld d,0
+    ld hl,slope_profiles
+    add hl,de
+    ld a,(hl)
+    and &f0
+    add a,a
+    ld b,a                       ; top-row offset in the first page of the view
+    ld a,c
+    and 3
+    dec a
+    rrca
+    rrca
+    rrca
+    xor c                        ; bit 5 is clear in cap_style
+    and &70
+    ld d,a
+    ld a,(hl)
+    and &0f
+    or d
+    ld e,a
+    ld d,0
+    ld hl,slope_tiles
+    add hl,de
+    ld c,(hl)
+    inc hl
+    ld d,(hl)
+
+    ld a,(column)
+    or b
+    ld l,a
+    ld h,view/256
+    ld (hl),c
+    ld a,l
+    xor &e0                       ; bottom row is 15 minus the top row
+    ld l,a
+    inc h
+    ld (hl),d
+    ret
+
+; Copy eight tiles down a screen column without testing each row for carry.
+draw_eight_tiles:
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
+    ld a,(de)
+    ld (hl),a
+    inc de
+    add hl,bc
     ret

@@ -37,6 +37,15 @@ const visibleObjects = ["creature_tiles", "ammo_tiles", "exit_tiles", "brute_til
 const digitTiles = romTiles("hud_digits", 10);
 const [heartEmpty, heartFull] = romTiles("hud_hearts", 2);
 const weaponNames = romTiles("weapon_names", 14);
+const miniTerrain = romTiles("mini_terrain", 4);
+const frameStart = 0xc080;
+const viewStart = 0xc100;
+const hudStart = 0xc360;
+const hudRow = 23;
+const lifeOffset = 1;
+const ammoOffset = 8;
+const weaponOffset = 11;
+const sectorOffset = 20;
 
 // Start the authentic machine and VDP, with a minimal host for the video output.
 const core = new vm.Script(
@@ -82,13 +91,13 @@ function boot(frequency) {
         VDP_CLOCK_MODE: 1,
     });
     const machine = new wmsx.Machine();
-    const inputs = { keys: 0, stick: 0, shift: false, menu: false, weapon: false, retry: false };
+    const inputs = { keys: 0, stick: 0, shift: false, menu: false, weapon: false, retry: false, minimap: false };
     machine.getControllersSocket().connectControls({
         resetControllers: noop,
         readKeyboardPort(row) {
             if (row === 8) return 255 ^ inputs.keys;
             if (row === 6 && inputs.shift) return 254;
-            if (row === 4) return 255 ^ (inputs.menu ? 4 : 0) ^ (inputs.retry ? 128 : 0);
+            if (row === 4) return 255 ^ (inputs.menu ? 4 : 0) ^ (inputs.retry ? 128 : 0) ^ (inputs.minimap ? 8 : 0);
             if (row === 5 && inputs.weapon) return 223;
             return 255;
         },
@@ -122,16 +131,18 @@ function boot(frequency) {
     slots.insertSlot(ram, 3, true, true);
     machine.powerOn();
 
+    let elapsed = 0;
     const read = (address) => machine.bus.read(address);
     const word = (address) => read(address) | (read(address + 1) << 8);
     return {
-        frame, inputs, machine, read,
+        frame, inputs, machine, read, elapsed: () => elapsed,
         write: (address, value) => machine.bus.write(address, value),
         run: (frames) => {
+            elapsed += frames;
             for (let i = 0; i < frames; i++) machine.videoClockPulse();
         },
-        xy: () => [word(0xc200), word(0xc202)],
-        currentView: () => Buffer.from(Array.from({ length: 512 }, (_, i) => read(0xc000 + i))),
+        xy: () => [word(0xf100), word(0xf102)],
+        currentView: () => Buffer.from(Array.from({ length: 512 }, (_, i) => read(viewStart + i))),
         video: () => {
             const state = machine.vdp.saveState();
             return {
@@ -161,27 +172,72 @@ function checkVideo(run) {
     assert.equal(run.machine.cpu.getZ80ClockMulti(), 1);
     assert.equal(regs[0] & 0x02, 0x02, "SCREEN 2 deve estar ativo.");
     assert.equal(regs[1] & 0x58, 0x40, "A tela deve estar ligada, com os bits de modo corretos.");
-    assert.equal(regs[2], run.read(0xc205), "R2 deve apontar para a página apresentada.");
-    const start = (regs[2] << 10) + 128;
-    assert.deepEqual(vram.subarray(start, start + 512), run.currentView());
+    assert.equal(regs[2], run.read(0xf105), "R2 deve apontar para a página apresentada.");
     const base = regs[2] << 10;
-    const hud = Buffer.from(Array.from({ length: 32 }, (_, i) => run.read(0xc240 + i)));
-    assert.deepEqual(vram.subarray(base + 21 * 32, base + 22 * 32), hud);
+    const frame = Buffer.from(Array.from({ length: 24 * 32 }, (_, i) => run.read(frameStart + i)));
+    assert.deepEqual(vram.subarray(base, base + frame.length), frame);
 }
 
 const state = {
-    playerX: 0xc200, playerY: 0xc202, heading: 0xc204, page: 0xc205, shown: 0xc20b, life: 0xc20f,
-    ammo: 0xc210, monster: 0xc211, monsterY: 0xc214, pickup: 0xc217,
-    door: 0xc218, outcome: 0xc219, hint: 0xc21a, flash: 0xc21b, menu: 0xc225,
-    sector: 0xc226, key: 0xc227, weapon: 0xc22a, brute: 0xc290, map: 0xc300,
-    wallDepth: 0xc260,
+    playerX: 0xf100, playerY: 0xf102, heading: 0xf104, page: 0xf105, shown: 0xf10b, life: 0xf10f,
+    ammo: 0xf110, enemyEnd: 0xf111, propEnd: 0xf112, keysHeld: 0xf113, mapTop: 0xf116,
+    outcome: 0xf119, hint: 0xf11a, flash: 0xf11b, menu: 0xf125, sector: 0xf126, weapon: 0xf12a, minimap: 0xf127,
+    wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400,
 };
 const up = 0x20;
 const down = 0x40;
 const right = 0x80;
 const space = 1;
-const startPosition = [0x0580, 0x0c80];
-const doorNorthing = 0x0640;
+const width = 32;
+const height = 44;
+const sectorStarts = [[4, 40], [27, 8], [4, 40]];
+const initialCharges = [8, 9, 10];
+const enemyCounts = [11, 12, 13];
+const names = ["Depósito", "Fundição", "Reator"];
+
+function mapAddress(x, y) {
+    return state.map + y * 256 + x;
+}
+
+function entities(demo, base, end) {
+    const list = [];
+    for (let address = base; (address & 255) !== demo.read(end); address += 8) {
+        list.push({
+            address,
+            x: demo.read(address + 2),
+            y: demo.read(address + 4),
+            kind: demo.read(address + 6),
+            arg: demo.read(address + 7),
+        });
+    }
+    return list;
+}
+
+function placePlayer(demo, x, y, heading = 0) {
+    for (const [axis, coordinate] of [[state.playerX, x], [state.playerY, y]]) {
+        demo.write(axis, 128);
+        demo.write(axis + 1, coordinate);
+    }
+    demo.write(state.heading, heading);
+}
+
+function installEntities(demo, base, end, records) {
+    for (const [i, [x, y, kind, arg]] of records.entries()) {
+        const bytes = [base === state.enemies ? arg : 1, 128, x, 128, y, 0, kind, arg];
+        bytes.forEach((value, offset) => demo.write(base + i * 8 + offset, value));
+    }
+    demo.write(end, (base + records.length * 8) & 255);
+}
+
+function emptyRoom(demo) {
+    for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+            demo.write(mapAddress(x, y), x > 0 && x < 15 && y > 0 && y < 15 ? 0 : 1);
+        }
+    }
+    installEntities(demo, state.enemies, state.enemyEnd, [[25, 25, 0, 2]]);
+    installEntities(demo, state.props, state.propEnd, [[25, 25, 0, 6]]);
+}
 
 function creatureTileCount(demo) {
     const { regs, vram } = demo.video();
@@ -190,7 +246,7 @@ function creatureTileCount(demo) {
 }
 
 function mapTile(demo, x, y) {
-    return demo.currentView()[y * 32 + 2 + x];
+    return demo.currentView()[(y - demo.read(state.mapTop)) * width + x];
 }
 
 function checkPlayerMarker(demo) {
@@ -218,21 +274,19 @@ function startCampaign(frequency) {
 
 function checkWallEdges(frequency, material, direction) {
     const demo = startCampaign(frequency);
-    demo.write(state.monster, 0);
-    demo.write(state.pickup, 0);
+    emptyRoom(demo);
+    demo.write(state.minimap, 0);
     const rotate = (x, y) => direction === 0 ? [x, y] : [15 - y, x];
     for (let y = 1; y < 15; y++) {
         for (let x = 1; x < 15; x++) {
             const [column, row] = rotate(x, y);
             // One block in front of a continuous wall of the same stone.
             const wall = y === 7 || (y === 10 && x === 5);
-            demo.write(state.map + row * 16 + column, wall ? material : 0);
+            demo.write(mapAddress(column, row), wall ? material : 0);
         }
     }
     const [x, y] = rotate(5, 12);
-    demo.write(state.playerX + 1, x);
-    demo.write(state.playerY + 1, y);
-    demo.write(state.heading, direction);
+    placePlayer(demo, x, y, direction);
     press(demo, "menu", true);
     press(demo, "menu", true);
     checkVideo(demo);
@@ -243,7 +297,7 @@ function checkWallEdges(frequency, material, direction) {
     const right = depths.lastIndexOf(nearest);
     assert.ok(left > 0 && right < 31 && right - left > 1);
     const styles = romTiles("wall_styles", 8);
-    const heights = romTiles("heights", romAddress("wall_columns") - romAddress("heights"));
+    const heights = romTiles("heights", romAddress("slope_sizes") - romAddress("heights"));
     const tiles = romTiles("wall_columns", romAddress("terrain_tiles") - romAddress("wall_columns"));
     const view = demo.currentView();
     for (const [column, depth] of depths.entries()) {
@@ -254,31 +308,66 @@ function checkWallEdges(frequency, material, direction) {
     }
 }
 
-function holdUntil(demo, keys, condition, limit = 500) {
+function checkSlopedWall(frequency, material) {
+    const demo = startCampaign(frequency);
+    emptyRoom(demo);
+    demo.write(state.minimap, 0);
+    for (let x = 1; x < 15; x++) demo.write(mapAddress(x, 7), material);
+    const heights = romTiles("heights", romAddress("slope_sizes") - romAddress("heights"));
+    const sizes = romTiles("slope_sizes", romAddress("slope_profiles") - romAddress("slope_sizes"));
+    const profiles = new Map([[0x07, 0x3f], [0xe0, 0xfc], [0x03, 0x0f], [0xc0, 0xf0]]);
+    const observed = new Set();
+    const highlight = material === 1 ? 5 : 10;
+    const shade = material === 1 ? 4 : 6;
+
+    for (const [x, y, heading] of [[8, 10, 7], [7, 8, 52]]) {
+        placePlayer(demo, x, y, heading);
+        press(demo, "menu", true);
+        press(demo, "menu", true);
+        const { vram } = demo.video();
+        const view = demo.currentView();
+        for (let column = 0; column < width; column++) {
+            const size = sizes[heights[demo.read(state.wallDepth + column)]];
+            if (size === 64) continue;
+            const top = 64 - size;
+            const row = top >> 3;
+            const clip = top & 7;
+            const cap = ((row + 4) >> 3) * 0x800 + view[row * width + column] * 8;
+            if (vram[0x2000 + cap + clip] !== (highlight << 4)) continue;
+            const first = vram[cap + clip];
+            assert.equal(vram[cap + clip + 1], profiles.get(first));
+            const bottomRow = 15 - row;
+            const foot = ((bottomRow + 4) >> 3) * 0x800 + view[bottomRow * width + column] * 8;
+            assert.equal(vram[foot + 7 - clip], first);
+            assert.equal(vram[foot + 6 - clip], profiles.get(first));
+            assert.equal(vram[0x2000 + foot + 7 - clip], shade << 4);
+            observed.add(first);
+        }
+    }
+    assert.ok(observed.has(0xe0) && observed.has(0x03), "A parede deve suavizar inclinações nos dois sentidos.");
+
+    placePlayer(demo, 8, 8);
+    demo.write(state.playerY, 64);
+    press(demo, "menu", true);
+    press(demo, "menu", true);
+    const nearWall = demo.currentView()[16];
+    for (const row of [0, 1, 2, 3, 20, 21, 22]) {
+        assert.equal(demo.read(frameStart + row * width + 16), nearWall, "A parede próxima deve preencher a área ampliada.");
+    }
+    checkVideo(demo);
+}
+
+function holdUntil(demo, keys, condition, limit = 500, settle = 12) {
     demo.inputs.keys = keys;
     for (let i = 0; i < limit && !condition(); i++) demo.run(1);
     assert.ok(condition(), "A ação deve chegar ao estado esperado.");
     demo.inputs.keys = 0;
-    demo.run(12);
-}
-
-function checkReset(demo) {
-    assert.deepEqual(demo.xy(), startPosition);
-    assert.equal(demo.read(state.heading), 0);
-    assert.equal(demo.read(state.life), 5);
-    assert.equal(demo.read(state.ammo), 2);
-    assert.equal(demo.read(state.monster), 2);
-    assert.equal(demo.read(state.pickup), 1);
-    assert.equal(demo.read(state.door), 0);
-    assert.equal(demo.read(state.map + 0x55), 3);
-    assert.equal(demo.read(state.outcome), 0);
-    checkVideo(demo);
-    checkHealthHud(demo, 5);
+    demo.run(settle);
 }
 
 function checkHealthHud(demo, full) {
     const { regs, vram } = demo.video();
-    const firstSlot = (regs[2] << 10) + 21 * 32 + 6;
+    const firstSlot = (regs[2] << 10) + hudRow * 32 + lifeOffset;
     const expected = Buffer.from(Array.from({ length: 5 }, (_, i) => i < full ? heartFull : heartEmpty));
     assert.deepEqual(vram.subarray(firstSlot, firstSlot + 5), expected, "O HUD deve exibir os corações restantes.");
 }
@@ -393,13 +482,14 @@ function checkOpening(frequency) {
     const psg = () => Buffer.from(demo.machine.psg.saveState().r, "base64");
     for (let i = 0; i < 360 && demo.read(state.outcome) !== 4; i++) demo.run(1);
     assert.equal(demo.read(state.outcome), 4);
-    assert.equal(demo.read(0xc22d), frequency === 60 ? 5 : 6);
-    assert.equal(word(0xc230), order + 2);
-    assert.equal(word(0xc232), first + 4);
+    demo.run(1); // Sample after the initial name-table upload.
+    assert.equal(demo.read(0xf12d), frequency === 60 ? 5 : 6);
+    assert.equal(word(0xf130), order + 2);
+    assert.equal(word(0xf132), first + 4);
     const firstMeter = demo.currentView().subarray(9 * 32 + 5, 9 * 32 + 29);
     let meterChanged = false;
     let notes = 0;
-    let previousStep = word(0xc232);
+    let previousStep = word(0xf132);
     let heardAllChannels = false;
     const noisePeriods = new Set();
     const mixerIO = psg()[7] & 0xc0;
@@ -407,7 +497,7 @@ function checkOpening(frequency) {
     for (let i = 0; i < frames; i++) {
         demo.run(1);
         if (recorder) recorder.readFrame();
-        const step = word(0xc232);
+        const step = word(0xf132);
         if (step !== previousStep) notes++;
         previousStep = step;
         const registers = psg();
@@ -419,8 +509,8 @@ function checkOpening(frequency) {
         if (i === frequency && frequency === 60 && titlePath) saveFrame(demo.frame, titlePath);
     }
     assert.equal(notes, 224, "A abertura deve completar o mesmo ciclo de 22,4 s em 50 e 60 Hz.");
-    assert.equal(word(0xc230), order + 2, "A faixa deve voltar ao primeiro compasso.");
-    assert.equal(word(0xc232), first + 4);
+    assert.equal(word(0xf130), order + 2, "A faixa deve voltar ao primeiro compasso.");
+    assert.equal(word(0xf132), first + 4);
     assert.ok(heardAllChannels && noisePeriods.size > 2 && meterChanged);
     if (recorder) recorder.save(openingPath);
     assert.ok(demo.video().vram.subarray(0x1820, 0x1840).every((tile) => tile === 0));
@@ -429,372 +519,371 @@ function checkOpening(frequency) {
     assert.equal(demo.read(state.outcome), 0);
     assert.deepEqual([...psg().subarray(8, 11)], [0, 0, 0], "A abertura deve silenciar ao jogar.");
     assert.equal(psg()[7] & 0x3f, 0x3f);
-    assert.equal(word(0xc232), first + 4, "O leitor da faixa deve ficar parado durante a partida.");
+    assert.equal(word(0xf132), first + 4, "O leitor da faixa deve ficar parado durante a partida.");
     checkWeapon(demo, 0);
     checkVideo(demo);
     console.log(`Abertura em ${frequency} Hz: 224 passos em 22,4 s, três canais e ruído ativos, repetição e mute OK.`);
 }
 
-function face(demo, angle) {
+function face(demo, angle, settle = 12) {
     const distance = (angle - demo.read(state.heading) + 64) & 63;
     if (distance === 0) return;
-    holdUntil(demo, distance <= 32 ? right : 0x10, () => demo.read(state.heading) === angle);
-}
-
-function walkTo(demo, axis, coordinate) {
-    const current = demo.xy()[axis];
-    if (current === coordinate) return;
-    const reached = current < coordinate
-        ? () => demo.xy()[axis] >= coordinate
-        : () => demo.xy()[axis] <= coordinate;
-    holdUntil(demo, up, reached);
-}
-
-function defeatActor(demo, hpAddress, context, damage = 1) {
-    let remaining = demo.read(hpAddress);
-    assert.ok(remaining > 0, context);
-    while (remaining > 0) {
-        remaining = Math.max(remaining - damage, 0);
-        press(demo, "keys", space);
-        assert.equal(demo.read(hpAddress), remaining, context);
-    }
+    holdUntil(demo, distance <= 32 ? right : 0x10, () => demo.read(state.heading) === angle, 500, settle);
 }
 
 function checkWeapon(demo, index) {
     assert.equal(demo.read(state.weapon), index);
     const { regs, vram } = demo.video();
-    const name = (regs[2] << 10) + 46;
+    const name = (regs[2] << 10) + hudRow * 32 + weaponOffset;
     assert.deepEqual(vram.subarray(name, name + 7), weaponNames.subarray(index * 7, index * 7 + 7));
     assert.equal(vram[0x1b0a], index === 0 ? 1 : 8);
 }
 
-function checkSector(demo, index, position, ammo, brute) {
+function checkSector(demo, index) {
     assert.equal(demo.read(state.sector), index);
     assert.equal(demo.read(state.outcome), 0);
-    assert.deepEqual(demo.xy(), position);
-    assert.equal(demo.read(state.ammo), ammo);
-    assert.equal(demo.read(state.brute), brute);
-    assert.equal(demo.read(state.key), index === 0 ? 0 : 1);
+    assert.deepEqual(demo.xy(), sectorStarts[index].map((axis) => axis * 256 + 128));
+    assert.equal(demo.read(state.ammo), initialCharges[index]);
+    assert.equal(demo.read(state.life), 5);
+    assert.equal(demo.read(state.keysHeld), 0);
+    assert.equal(entities(demo, state.enemies, state.enemyEnd).length, enemyCounts[index]);
+    const props = entities(demo, state.props, state.propEnd);
+    for (const gate of props.filter(({ kind }) => kind === 3)) {
+        assert.equal(demo.read(gate.address), 1);
+        assert.equal(demo.read(mapAddress(gate.x, gate.y)), 3);
+    }
     checkWeapon(demo, 0);
+    checkHealthHud(demo, 5);
     const { regs, vram } = demo.video();
-    assert.equal(vram[(regs[2] << 10) + 61], digitTiles[index + 1]);
+    assert.equal(vram[(regs[2] << 10) + hudRow * 32 + sectorOffset], digitTiles[index + 1]);
     checkVideo(demo);
 }
 
-function finishCampaign(demo, frequency) {
-    checkSector(demo, 1, [0x0380, 0x0c80], 5, 3);
+function checkMenu(demo, frequency) {
+    press(demo, "menu", true);
+    assert.equal(demo.read(state.menu), 1);
+    const legend = demo.currentView();
+    for (const [index, tile] of terrain.entries()) assert.equal(legend[(5 + 2 * index) * 32 + 2], tile);
+    for (const [index, tile] of [playerArrows[0], ...visibleObjects].entries()) {
+        assert.equal(legend[(5 + 2 * index) * 32 + 20], tile);
+    }
+    assert.equal(legend[15 * 32 + 2], heartFull);
+    assert.equal(demo.video().vram[0x1b00], 208);
+    if (frequency === 60 && legendPath) saveFrame(demo.frame, legendPath);
+
+    const frozen = demo.xy();
+    press(demo, "stick", 0x08);
+    assert.equal(demo.read(state.menu), 2);
+    checkPlayerMarker(demo);
+    const origin = demo.read(state.mapTop);
+    press(demo, "keys", up);
+    assert.ok(demo.read(state.mapTop) < origin, "A aba de mapa deve permitir olhar para o norte.");
+    assert.deepEqual(demo.xy(), frozen);
+    press(demo, "keys", down);
+    assert.equal(demo.read(state.mapTop), origin);
+    if (frequency === 60 && mapPath) saveFrame(demo.frame, mapPath);
+    press(demo, "keys", 0x10);
+    assert.equal(demo.read(state.menu), 1);
+    press(demo, "stick", 0x30);
+    assert.equal(demo.read(state.menu), 0);
+    assert.equal(demo.read(state.ammo), 8, "Abrir ou fechar o menu não deve disparar.");
+    checkVideo(demo);
+}
+
+function checkMinimap(frequency) {
+    const demo = startCampaign(frequency);
+    assert.equal(demo.read(state.minimap), 1);
+    emptyRoom(demo);
+    const doors = [[5, 11, 3, 1], [6, 12, 0, 8], [6, 13, 2, 2]];
+    installEntities(demo, state.props, state.propEnd, doors);
+    installEntities(demo, state.enemies, state.enemyEnd, [[7, 11, 0, 2]]);
+    demo.write(state.enemies + 5, 255); // Keep the living enemy still in the fixture.
+    demo.write(mapAddress(4, 10), 1);
+    demo.write(mapAddress(8, 10), 2);
+    demo.write(mapAddress(5, 11), 3);
+    placePlayer(demo, 5, 12);
+
+    const syncView = () => {
+        press(demo, "menu", true);
+        press(demo, "menu", true);
+    };
+    const checkTerrain = (arrow) => {
+        const [x, y] = demo.xy().map((coordinate) => coordinate >> 8);
+        const left = Math.max(0, Math.min(width - 7, x - 3));
+        const top = Math.max(0, Math.min(height - 5, y - 2));
+        const { regs, vram } = demo.video();
+        const base = (regs[2] << 10) + 32 + 24;
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 7; col++) {
+                const mapX = left + col, mapY = top + row;
+                const expected = mapX === x && mapY === y ? playerArrows[arrow]
+                    : miniTerrain[demo.read(mapAddress(mapX, mapY))];
+                assert.equal(vram[base + row * 32 + col], expected, "Minimapa deve mostrar apenas terreno e jogador.");
+            }
+        }
+    };
+    syncView();
+    checkTerrain(0);
     press(demo, "menu", true);
     press(demo, "keys", right);
-    checkPlayerMarker(demo);
-    assert.equal(mapTile(demo, 9, 8), visibleObjects[3], "O mapa deve mostrar o bruto no setor 2.");
-    assert.equal(mapTile(demo, 10, 7), visibleObjects[4], "A chave deve aparecer no mapa.");
+    assert.equal(mapTile(demo, 7, 11), visibleObjects[0]);
+    assert.equal(mapTile(demo, 6, 12), visibleObjects[1]);
+    assert.equal(mapTile(demo, 6, 13), visibleObjects[4]);
     press(demo, "menu", true);
-    press(demo, "keys", space);
-    assert.equal(demo.read(state.monster), 1);
-    press(demo, "retry", true);
-    checkSector(demo, 1, [0x0380, 0x0c80], 5, 3);
-    defeatActor(demo, state.monster, "Monstro do setor 2");
-    walkTo(demo, 1, 0x088c);
-    face(demo, 16);
-    defeatActor(demo, state.brute, "Bruto do setor 2");
-    walkTo(demo, 0, 0x0b80);
-    face(demo, 0);
-    walkTo(demo, 1, 0x0670);
-    face(demo, 48);
-    walkTo(demo, 0, 0x0a80);
-    press(demo, "shift", true);
-    assert.equal(demo.read(state.door), 0, "A saída exige a chave mesmo após derrotar os monstros.");
-    assert.equal(demo.read(state.hint), 6);
-    face(demo, 32);
-    walkTo(demo, 1, 0x0780);
-    assert.equal(demo.read(state.key), 0);
-    face(demo, 0);
-    walkTo(demo, 1, 0x0650);
-    press(demo, "shift", true);
-    assert.equal(demo.read(state.door), 1);
-    holdUntil(demo, up, () => demo.read(state.outcome) === 2);
-    press(demo, "keys", space);
 
-    checkSector(demo, 2, [0x0b80, 0x0d80], 6, 4);
+    demo.inputs.minimap = true;
+    demo.run(40);
+    demo.inputs.minimap = false;
+    demo.run(12);
+    assert.equal(demo.read(state.minimap), 0, "N deve alternar somente uma vez enquanto estiver pressionado.");
+    assert.notEqual(demo.read(frameStart + 3 * 32 + 27), playerArrows[0]);
+    const before = demo.xy();
+    press(demo, "stick", 0x22); // B + down
+    assert.equal(demo.read(state.minimap), 1);
+    assert.deepEqual(demo.xy(), before, "O atalho do joystick não deve mover o jogador.");
+    face(demo, 16);
+    checkTerrain(1);
+    face(demo, 0);
+    demo.write(state.keysHeld, 1);
+    holdUntil(demo, up, () => demo.xy()[1] < before[1]);
+    press(demo, "shift", true);
+    assert.equal(demo.read(mapAddress(5, 11)), 0);
+    checkTerrain(0);
+    walkRun(demo, [5, 11], 0);
+    checkTerrain(0);
+    placePlayer(demo, 1, 2);
+    syncView();
+    checkTerrain(0);
+    checkVideo(demo);
+}
+
+// Isolate gun range, enemy movement, damage effects and supplies from the
+// layout of the campaign. The campaign navigation below uses the shipped maps.
+function openArena(frequency, enemies, props = [[11, 10, 0, 6]]) {
+    const demo = startCampaign(frequency);
+    emptyRoom(demo);
+    installEntities(demo, state.enemies, state.enemyEnd, enemies);
+    installEntities(demo, state.props, state.propEnd, props);
+    placePlayer(demo, 5, 12);
+    press(demo, "menu", true);
+    press(demo, "menu", true);
+    return demo;
+}
+
+function checkArena(frequency) {
+    const demo = openArena(frequency, [[5, 8, 0, 2], [11, 8, 1, 4]], [[6, 12, 0, 6], [7, 12, 1, 2]]);
+    assert.ok(creatureTileCount(demo) > 0);
     press(demo, "weapon", true);
     checkWeapon(demo, 1);
-    holdUntil(demo, up, () => demo.read(state.pickup) === 0);
-    assert.equal(demo.read(state.ammo), 10);
-    assert.equal(demo.read(0xc240 + 16), digitTiles[1]);
-    assert.equal(demo.read(0xc240 + 17), digitTiles[0]);
-    defeatActor(demo, state.brute, "Bruto do setor 3 com arma de pulso", 2);
-    assert.equal(demo.read(state.ammo), 6, "Dois pulsos devem gastar quatro cargas.");
-    press(demo, "stick", 0x21); // B + up
+    press(demo, "keys", space);
+    assert.equal(demo.read(state.enemies), 2, "Pistola de pulso fora do alcance.");
+    assert.equal(demo.read(state.ammo), 6);
+    press(demo, "weapon", true);
     checkWeapon(demo, 0);
-    walkTo(demo, 1, 0x098c);
-    face(demo, 48);
-    defeatActor(demo, state.monster, "Monstro do setor 3");
-    walkTo(demo, 0, 0x0480);
-    face(demo, 0);
-    walkTo(demo, 1, 0x0550);
-    assert.equal(demo.read(state.key), 0);
-    press(demo, "shift", true);
-    assert.equal(demo.read(state.door), 1);
-    holdUntil(demo, up, () => demo.read(state.outcome) === 3);
-    checkVideo(demo);
-    assert.equal(demo.video().vram[0x1b00], 208);
-    if (frequency === 60 && endingPath) saveFrame(demo.frame, endingPath);
     press(demo, "keys", space);
-    assert.equal(demo.read(state.outcome), 4);
-    assert.equal(demo.read(state.sector), 0);
-    let musicResumed = false;
-    for (let i = 0; i < 12; i++) {
-        demo.run(1);
-        const psg = Buffer.from(demo.machine.psg.saveState().r, "base64");
-        musicResumed ||= psg.subarray(8, 11).some((volume) => volume > 0);
+    assert.equal(demo.read(state.enemies), 1);
+    press(demo, "stick", 0x10);
+    assert.equal(demo.read(state.enemies), 0);
+    assert.equal(demo.read(state.ammo), 4);
+    assert.equal(demo.read(state.enemies + 8), 4);
+
+    // Approach the box and the medkit with walking input.
+    face(demo, 16);
+    demo.write(state.life, 2);
+    walkRun(demo, [7, 12], 16);
+    demo.run(12);
+    assert.equal(demo.read(state.ammo), 10);
+    assert.equal(demo.read(state.life), 4);
+    assert.equal(demo.read(state.props), 0);
+    assert.equal(demo.read(state.props + 8), 0);
+    assert.equal(demo.read(hudStart + ammoOffset), digitTiles[1]);
+    assert.equal(demo.read(hudStart + ammoOffset + 1), digitTiles[0]);
+    checkHealthHud(demo, 4);
+
+    const two = openArena(frequency, [[4, 9, 0, 2], [6, 9, 1, 4]]);
+    const view = two.currentView();
+    assert.ok(view.some((tile) => creatureTiles.has(tile)) && view.some((tile) => bruteTiles.has(tile)),
+        "As duas espécies devem aparecer juntas.");
+
+    const pulse = openArena(frequency, [[5, 9, 1, 4]]);
+    press(pulse, "weapon", true);
+    pulse.inputs.keys = space;
+    pulse.run(frequency);
+    pulse.inputs.keys = 0;
+    assert.equal(pulse.read(state.enemies), 0, "Rajadas de pulso devem derrubar um bruto.");
+    assert.ok(pulse.read(state.ammo) <= 4, "O tiro deve repetir com o gatilho pressionado.");
+
+    const blocked = openArena(frequency, [[5, 8, 0, 2]], [[5, 10, 3, 1], [6, 12, 2, 2]]);
+    for (let x = 1; x < 15; x++) blocked.write(mapAddress(x, 10), x === 5 ? 3 : 1);
+    face(blocked, 16);
+    walkRun(blocked, [6, 12], 16);
+    blocked.run(12);
+    assert.equal(blocked.read(state.keysHeld), 2);
+    face(blocked, 48);
+    walkRun(blocked, [5, 12], 48);
+    face(blocked, 0);
+    holdUntil(blocked, up, () => blocked.xy()[1] < 11 * 256 + 80);
+    press(blocked, "shift", true);
+    assert.equal(blocked.read(state.props), 1);
+    assert.equal(blocked.read(state.hint), 5, "Uma chave de outra porta não pode abrir o portão.");
+    assert.equal(creatureTileCount(blocked), 0);
+    press(blocked, "keys", space);
+    assert.equal(blocked.read(state.enemies), 2, "A porta deve barrar o disparo e a criatura.");
+    assert.equal(blocked.read(state.enemies + 3), 128);
+    checkVideo(blocked);
+
+    const damage = openArena(frequency, [[5, 8, 0, 2]]);
+    checkDamageFeedback(damage, frequency);
+    if (frequency === 60 && healthPath) saveFrame(damage.frame, healthPath);
+    holdUntil(damage, up, () => damage.read(state.outcome) === 1, 1000);
+    checkHealthHud(damage, 0);
+    press(damage, "stick", 0x10);
+    checkSector(damage, 0);
+
+    const combat = openArena(frequency, [[5, 8, 0, 2]]);
+    const before = combat.read(state.shown);
+    const farTiles = creatureTileCount(combat);
+    combat.inputs.keys = up;
+    combat.run(frequency);
+    combat.inputs.keys = 0;
+    const frames = (combat.read(state.shown) - before + 256) % 256;
+    let nearTiles = 0;
+    for (let i = 0; i < 10; i++) {
+        combat.run(1);
+        nearTiles = Math.max(nearTiles, creatureTileCount(combat));
     }
-    assert.ok(musicResumed, "A música deve voltar ao retornar ao título.");
+    assert.ok(nearTiles > farTiles, "O monstro deve crescer ao se aproximar.");
+    combat.inputs.keys = space;
+    let flash = false;
+    for (let i = 0; i < 20; i++) {
+        combat.run(1);
+        if (combat.read(state.enemies) === 1) combat.inputs.keys = 0;
+        if (combat.video().vram[0x1b04] === 159 && creatureTileCount(combat) > farTiles && !flash) {
+            flash = true;
+            if (frequency === 60 && snapshotPath) {
+                combat.run(1);
+                saveFrame(combat.frame, snapshotPath);
+            }
+        }
+    }
+    assert.ok(flash);
+    assert.equal(combat.read(state.enemies), 1);
+    assert.ok(frames >= 10, `Combate isolado a ${frequency} Hz: ${frames} quadros/s.`);
+    console.log(`Combate isolado a ${frequency} Hz: ${frames} quadros no primeiro segundo.`);
+}
+
+// Plan from the live terrain, then send only directional controls to walk it.
+function routeTo(demo, target, includeDoor) {
+    const cell = (x, y) => y * width + x;
+    const [x, y] = demo.xy().map((axis) => axis >> 8);
+    const start = cell(x, y);
+    const end = cell(target.x, target.y);
+    const parents = new Map([[start, start]]);
+    const todo = [start];
+    for (let i = 0; i < todo.length && !parents.has(end); i++) {
+        const current = todo[i];
+        for (const next of [current - width, current + 1, current + width, current - 1]) {
+            if (parents.has(next)) continue;
+            if (demo.read(mapAddress(next % width, Math.floor(next / width))) && !(includeDoor && next === end)) {
+                continue;
+            }
+            parents.set(next, current);
+            todo.push(next);
+        }
+    }
+    assert.ok(parents.has(end), `Sem rota para ${target.x},${target.y}.`);
+    const path = [];
+    for (let next = end; next !== start; next = parents.get(next)) path.push(next);
+    return [start, ...path.reverse()];
+}
+
+function walkRun(demo, target, heading, exit = false, settle = 12) {
+    const axis = heading % 32 ? 0 : 1;
+    const increasing = heading === 16 || heading === 32;
+    const goal = target[axis] * 256 + 128;
+    const reached = () => {
+        if (exit && demo.read(state.outcome)) return true;
+        const position = demo.xy()[axis];
+        return increasing ? position >= goal - 20 : position <= goal + 20;
+    };
+    holdUntil(demo, up, reached, 1800, settle);
+}
+
+function walkRoute(demo, target, gate = false) {
+    const path = routeTo(demo, target, gate);
+    if (gate) path.pop();
+    const headings = new Map([[-width, 0], [1, 16], [width, 32], [-1, 48]]);
+    for (let i = 1; i < path.length; i++) {
+        const stride = path[i] - path[i - 1];
+        while (i + 1 < path.length && path[i + 1] - path[i] === stride) i++;
+        const heading = headings.get(stride);
+        face(demo, heading, 0);
+        const exit = i === path.length - 1 && target.kind === 4;
+        walkRun(demo, [path[i] % width, Math.floor(path[i] / width)], heading, exit, 0);
+    }
+    if (gate) {
+        const last = path.at(-1);
+        const heading = headings.get(target.y * width + target.x - last);
+        face(demo, heading, 0);
+        const axis = heading % 32 ? 0 : 1;
+        const center = (axis === 0 ? target.x : target.y) * 256 + 128;
+        holdUntil(demo, up, () => Math.abs(demo.xy()[axis] - center) < 224, 500, 0);
+        press(demo, "shift", true);
+        assert.equal(demo.read(target.address), 0);
+        assert.equal(demo.read(mapAddress(target.x, target.y)), 0);
+        walkRun(demo, [target.x, target.y], heading, false, 0);
+    }
+}
+
+function playCampaign(frequency) {
+    const demo = startCampaign(frequency);
+    checkMenu(demo, frequency);
+    for (let sector = 0; sector < names.length; sector++) {
+        checkSector(demo, sector);
+        const props = entities(demo, state.props, state.propEnd);
+        const keys = props.filter(({ kind }) => kind === 2).sort((a, b) => a.arg - b.arg);
+        const gates = props.filter(({ kind }) => kind === 3).sort((a, b) => a.arg - b.arg);
+        assert.equal(keys.length, 4);
+        assert.deepEqual(keys.map(({ arg }) => arg), [1, 2, 4, 8]);
+        assert.deepEqual(gates.map(({ arg }) => arg), [1, 2, 4, 8]);
+
+        // Disable enemies only in this run to time traversal on a known route.
+        for (const { address } of entities(demo, state.enemies, state.enemyEnd)) demo.write(address, 0);
+        const before = demo.elapsed();
+        for (const [i, key] of keys.entries()) {
+            walkRoute(demo, key);
+            assert.equal(demo.read(key.address), 0);
+            assert.equal(demo.read(state.keysHeld), (1 << (i + 1)) - 1);
+            walkRoute(demo, gates[i], true);
+            if (i === 1) {
+                press(demo, "menu", true);
+                press(demo, "keys", right);
+                checkPlayerMarker(demo);
+                press(demo, "menu", true);
+            }
+        }
+        walkRoute(demo, props.find(({ kind }) => kind === 4));
+        assert.equal(demo.read(state.outcome), sector === names.length - 1 ? 3 : 2);
+        const seconds = (demo.elapsed() - before) / frequency;
+        assert.ok(seconds >= 120, `${names[sector]} levou só ${seconds.toFixed(1)} s.`);
+        console.log(`${names[sector]}, ${frequency} Hz: ${seconds.toFixed(1)} s de rota guiada sem combate.`);
+        demo.run(12);
+        checkVideo(demo);
+        if (sector === names.length - 1 && frequency === 60 && endingPath) saveFrame(demo.frame, endingPath);
+        press(demo, "keys", space);
+    }
+    assert.equal(demo.read(state.outcome), 4);
     press(demo, "keys", space);
-    checkReset(demo);
+    checkSector(demo, 0);
 }
 
 for (const frequency of [60, 50]) {
     checkOpening(frequency);
     checkWallEdges(frequency, 1, 0);
     checkWallEdges(frequency, 2, 16);
-    let demo = startCampaign(frequency);
-    const shown = () => demo.read(state.shown);
-    const heading = () => demo.read(state.heading);
-    const read = (key) => demo.read(state[key]);
-
-    checkReset(demo);
-    const beforeIdle = shown();
-    demo.run(12);
-    assert.equal(shown(), beforeIdle, "A cena em repouso deve manter a mesma página.");
-    const initialView = demo.currentView();
-    assert.ok(new Set(initialView).size > 4, "O primeiro quadro deve conter a cena.");
-    assert.ok(creatureTileCount(demo) > 0, "O monstro deve aparecer ao fundo ao iniciar.");
-
-    press(demo, "menu", true);
-    assert.equal(read("menu"), 1);
-    assert.equal(demo.video().vram[0x1b00], 208, "Arma e mira devem sumir durante a pausa.");
-    const legend = demo.currentView();
-    for (const [index, tile] of terrain.entries()) assert.equal(legend[(5 + 2 * index) * 32 + 2], tile);
-    const openDoor = legend[13 * 32 + 2];
-    assert.notEqual(openDoor, terrain[3]);
-    for (const [index, tile] of [playerArrows[0], ...visibleObjects].entries()) {
-        assert.equal(legend[(5 + 2 * index) * 32 + 20], tile);
-    }
-    if (frequency === 60 && legendPath) saveFrame(demo.frame, legendPath);
-
-    press(demo, "keys", right);
-    assert.equal(read("menu"), 2);
-    checkVideo(demo);
-    checkPlayerMarker(demo);
-    assert.equal(mapTile(demo, 0, 0), terrain[1]);
-    assert.equal(mapTile(demo, 4, 10), terrain[2]);
-    assert.equal(mapTile(demo, 5, 5), terrain[3]);
-    assert.equal(mapTile(demo, 5, 8), visibleObjects[0]);
-    assert.equal(mapTile(demo, 5, 11), visibleObjects[1]);
-    assert.equal(mapTile(demo, 5, 3), visibleObjects[2]);
-    if (frequency === 60 && mapPath) saveFrame(demo.frame, mapPath);
-    press(demo, "keys", up | space);
-    assert.deepEqual(demo.xy(), startPosition, "O mapa deve pausar o jogador.");
-    assert.equal(read("ammo"), 2, "Espaço no mapa não deve disparar.");
-    press(demo, "stick", 0x04);
-    assert.equal(read("menu"), 1);
-    assert.deepEqual(demo.currentView(), legend);
-    press(demo, "menu", true);
-    assert.equal(read("menu"), 0);
-    assert.equal(demo.video().vram[0x1b00], 92);
-    assert.deepEqual(demo.currentView(), initialView);
-
-    const dual = startCampaign(frequency);
-    [3, 128, 6, 128, 8, 0].forEach((value, i) => dual.write(state.brute + i, value));
-    press(dual, "menu", true);
-    press(dual, "menu", true);
-    const bothInView = dual.currentView();
-    assert.ok(bothInView.some((tile) => creatureTiles.has(tile)) &&
-        bothInView.some((tile) => bruteTiles.has(tile)), "O renderizador deve exibir os dois inimigos juntos.");
-
-    press(dual, "weapon", true);
-    checkWeapon(dual, 1);
-    press(dual, "keys", space);  // At four cells, the pulse should fall short.
-    assert.equal(dual.read(state.monster), 2);
-    assert.equal(dual.read(state.ammo), 0);
-    press(dual, "keys", space);
-    assert.equal(dual.read(state.hint), 4);
-
-    // Hold the trigger across many simulation ticks. The first shot should hit
-    // only once, show a flash in the VDP and put real noise on PSG channel A.
-    demo.inputs.keys = space;
-    let flashSeen = false;
-    let soundSeen = false;
-    for (let i = 0; i < 24; i++) {
-        demo.run(1);
-        if (read("flash")) {
-            flashSeen ||= demo.video().vram[0x1b04] === 135;
-            const psg = Buffer.from(demo.machine.psg.saveState().r, "base64");
-            soundSeen ||= psg[6] === 7 && (psg[7] & 0x09) === 1 && psg[8] === 12;
-        }
-    }
-    assert.ok(flashSeen && soundSeen, "O disparo deve ter clarão e ruído no PSG.");
-    assert.equal(demo.video().vram[0x1b04], 209);
-    assert.equal(Buffer.from(demo.machine.psg.saveState().r, "base64")[8], 0);
-    assert.equal(read("ammo"), 1);
-    assert.equal(read("monster"), 1);
-    demo.inputs.keys = 0;
-    demo.run(12);
-    press(demo, "stick", 0x10); // Joystick A
-    assert.equal(read("ammo"), 0);
-    assert.equal(read("monster"), 0);
-    press(demo, "keys", space);
-    assert.equal(read("hint"), 4, "O HUD deve indicar a falta de munição.");
-
-    const beforeWalking = shown();
-    demo.inputs.keys = up;
-    const pages = new Set();
-    for (let i = 0; i < frequency; i++) {
-        demo.run(1);
-        pages.add(read("page"));
-    }
-    const walkingFps = (shown() - beforeWalking + 256) % 256;
-    assert.ok(walkingFps >= 12, "Meta da POC durante marcha inicial: 12 quadros/s.");
-    assert.deepEqual(pages, new Set([6, 7]));
-    assert.equal(read("pickup"), 0);
-    assert.equal(read("ammo"), 4);
-    holdUntil(demo, up, () => demo.xy()[1] <= doorNorthing);
-    assert.deepEqual(demo.xy(), [0x0580, doorNorthing], "A porta fechada deve barrar o jogador.");
-    const blocked = shown();
-    demo.inputs.keys = up;
-    demo.run(30);
-    demo.inputs.keys = 0;
-    assert.equal(shown(), blocked, "O contato com a porta deve estabilizar a imagem.");
-    assert.notDeepEqual(demo.currentView(), initialView);
-    checkVideo(demo);
-
-    press(demo, frequency === 60 ? "shift" : "stick", frequency === 60 ? true : 0x20);
-    assert.equal(read("door"), 1);
-    assert.equal(demo.read(state.map + 0x55), 0);
-    press(demo, "menu", true);
-    press(demo, "stick", 0x08);
-    assert.equal(read("menu"), 2);
-    checkPlayerMarker(demo);
-    assert.notEqual(mapTile(demo, 5, 12), playerArrows[0], "O marcador deve sair da posição inicial.");
-    assert.equal(mapTile(demo, 5, 5), openDoor);
-    assert.equal(mapTile(demo, 5, 8), terrain[0], "O monstro derrotado deve sumir do mapa.");
-    assert.equal(mapTile(demo, 5, 11), terrain[0], "A caixa coletada deve sumir do mapa.");
-    press(demo, "menu", true);
-    holdUntil(demo, up, () => read("outcome") === 2);
-    assert.equal(read("life"), 5);
-    const victoryView = demo.currentView();
-    checkVideo(demo);
-    press(demo, "keys", space);
-    assert.equal(demo.read(state.sector), 1);
-    assert.notDeepEqual(demo.currentView(), victoryView);
-    finishCampaign(demo, frequency);
-
-    // Read the live creature through movement, contact attack and defeat.
-    demo = startCampaign(frequency);
-    checkDamageFeedback(demo, frequency);
-    if (frequency === 60 && healthPath) saveFrame(demo.frame, healthPath);
-    holdUntil(demo, up, () => read("outcome") === 1);
-    assert.equal(read("life"), 0);
-    assert.equal(read("monster"), 1);
-    assert.notEqual(demo.read(state.monsterY), 0x80);
-    assert.notDeepEqual(demo.currentView(), victoryView);
-    checkVideo(demo);
-    checkHealthHud(demo, 0);
-    press(demo, "stick", 0x10);
-    checkReset(demo);
-
-    press(demo, "keys", down);
-    assert.ok(demo.xy()[1] > startPosition[1], "A seta para baixo deve recuar.");
-
-    const beforeTurn = demo.currentView();
-    press(demo, "keys", right);
-    const facingRight = heading();
-    assert.ok(facingRight > 0 && facingRight < 16);
-    assert.notDeepEqual(demo.currentView(), beforeTurn);
-    checkVideo(demo);
-
-    press(demo, "stick", 0x04); // Joystick left on port 1
-    const leftTurn = (facingRight - heading() + 64) % 64;
-    assert.ok(leftTurn > 0 && leftTurn < 8, "O joystick da porta 1 deve girar à esquerda.");
-    checkVideo(demo);
-
-    const beforeDiagonal = heading();
-    const [, previousY] = demo.xy();
-    press(demo, "stick", 0x0a); // Joystick down + right
-    const diagonalTurn = (heading() - beforeDiagonal + 64) % 64;
-    assert.ok(diagonalTurn > 0 && diagonalTurn < 8);
-    assert.ok(demo.xy()[1] > previousY, "A diagonal deve recuar e girar juntas.");
-    checkVideo(demo);
-    holdUntil(demo, right, () => heading() >= 8 && heading() < 24);
-    press(demo, "stick", 0x30); // A+B
-    assert.equal(read("menu"), 1);
-    assert.equal(read("ammo"), 2, "O atalho do joystick não deve disparar.");
-    press(demo, "keys", right);
-    assert.equal(read("menu"), 2);
-    assert.equal(mapTile(demo, ...demo.xy().map((coord) => coord >> 8)), playerArrows[1]);
-    press(demo, "stick", 0x30);
-    assert.equal(read("menu"), 0);
-
-    // Stage the same actor on the other side of the closed door. This isolates
-    // occlusion, hitscan and enemy sight from the timing of the chase.
-    const behindDoor = startCampaign(frequency);
-    behindDoor.write(state.playerY, doorNorthing & 255);
-    behindDoor.write(state.playerY + 1, doorNorthing >> 8);
-    behindDoor.write(state.monsterY + 1, 4);
-    press(behindDoor, "shift", true);
-    assert.equal(behindDoor.read(state.hint), 3, "Com o monstro vivo, a porta deve ficar trancada.");
-    assert.equal(behindDoor.read(state.door), 0);
-    assert.equal(creatureTileCount(behindDoor), 0, "A porta fechada deve encobrir o monstro.");
-    press(behindDoor, "keys", space);
-    assert.equal(behindDoor.read(state.ammo), 1);
-    assert.equal(behindDoor.read(state.monster), 2, "O tiro deve parar na porta.");
-    assert.equal(behindDoor.read(state.monsterY), 0x80, "A porta deve interromper a visão do monstro.");
-    checkVideo(behindDoor);
-
-    const arena = startCampaign(frequency);
-    const beforeArena = arena.read(state.shown);
-    const farTiles = creatureTileCount(arena);
-    arena.inputs.keys = up;
-    arena.run(frequency);
-    arena.inputs.keys = 0;
-    const combatFps = (arena.read(state.shown) - beforeArena + 256) % 256;
-    let nearTiles = 0;
-    for (let i = 0; i < 10; i++) {
-        arena.run(1);
-        nearTiles = Math.max(nearTiles, creatureTileCount(arena));
-    }
-    assert.ok(nearTiles > farTiles, "O monstro deve crescer na tela ao se aproximar.");
-    press(arena, "menu", true);
-    press(arena, "keys", right);
-    const lifeOnPause = arena.read(state.life);
-    const getEnemyPosition = () => [0xc212, state.monsterY].map((address) =>
-        arena.read(address) | (arena.read(address + 1) << 8));
-    const enemyPosition = getEnemyPosition();
-    const enemyCell = enemyPosition.map((coordinate) => coordinate >> 8);
-    const playerCell = arena.xy().map((coordinate) => coordinate >> 8);
-    if (playerCell[0] === enemyCell[0] && playerCell[1] === enemyCell[1]) {
-        checkPlayerMarker(arena);
-    } else {
-        assert.equal(mapTile(arena, ...enemyCell), visibleObjects[0]);
-    }
-    arena.run(180);
-    assert.equal(arena.read(state.life), lifeOnPause);
-    assert.deepEqual(getEnemyPosition(), enemyPosition);
-    press(arena, "menu", true);
-    const ammoBeforeShot = arena.read(state.ammo);
-    arena.inputs.keys = space;
-    let combatFrameSeen = false;
-    for (let i = 0; i < 20; i++) {
-        arena.run(1);
-        if (arena.video().vram[0x1b04] === 135 && creatureTileCount(arena) > farTiles && !combatFrameSeen) {
-            arena.run(1);
-            combatFrameSeen = true;
-            if (frequency === 60 && snapshotPath) saveFrame(arena.frame, snapshotPath);
-        }
-    }
-    assert.equal(arena.read(state.ammo), ammoBeforeShot - 1);
-    assert.equal(arena.read(state.monster), 1);
-    assert.ok(combatFrameSeen, "Um disparo e o monstro devem aparecer no mesmo quadro.");
-    assert.ok(combatFps >= 12);
-    console.log(`MSX1 64 KiB, ${frequency} Hz: campanha completa, duas espécies, chave, mapa, combate, PSG, derrota e reinício OK. Avanço inicial: ${combatFps} quadros apresentados em 1 s.`);
+    checkSlopedWall(frequency, frequency === 60 ? 1 : 2);
+    checkMinimap(frequency);
+    checkArena(frequency);
+    playCampaign(frequency);
+    console.log(`MSX1 64 KiB, ${frequency} Hz: campanha, portas, chaves, combate, cura, mapa e PSG OK.`);
 }

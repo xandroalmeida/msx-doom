@@ -3,10 +3,11 @@ reset_level:
     call clear_damage_feedback
     xor a
     ld (heading),a
-    ld (door_open),a
+    ld (access_keys),a
     ld (outcome),a
     ld (hint),a
     ld (flash),a
+    ld (shot_repeat),a
     ld (effect_timer),a
     ld (weapon),a
     ld e,a
@@ -15,17 +16,9 @@ reset_level:
     ld e,0
     ld a,9
     call WRTPSG
-    ld a,1
-    ld (supplies),a
-    ld (dirty),a
-    ld a,(initial_ammo)
-    ld (ammo),a
-    ld a,(needs_key)
-    ld (key_waiting),a
     ld a,max_life
     ld (life),a
-    call show_sector_number
-    jp show_weapon_name
+    jp set_weapon_sprite
 
 load_sector:
     ld a,(sector)
@@ -42,72 +35,119 @@ load_sector:
     inc hl
     ld d,(hl)
     inc hl
-    push de                       ; packed map pointer
-    ld de,player_x
-    ld bc,4
-    ldir
-    ld de,enemy_hp
-    ld bc,6
-    ldir
-    ld de,enemy_brute
-    ld bc,6
-    ldir
-    ld de,door_point
-    ld bc,needs_key-door_point+1
-    ldir
+    push de                       ; compressed terrain
+    ld a,(hl)
+    ld (player_x+1),a
+    inc hl
+    ld a,(hl)
+    ld (player_y+1),a
+    inc hl
+    ld a,&80
+    ld (player_x),a
+    ld (player_y),a
+    ld a,(hl)
+    ld (ammo),a
+    inc hl
+    ld b,(hl)
+    inc hl
+    ld de,enemies
+    call load_entities
+    ld a,e
+    ld (enemy_end),a
+    ld b,(hl)
+    inc hl
+    ld de,props
+    call load_entities
+    ld a,e
+    ld (prop_end),a
+
     pop hl
     ld de,live_map
-    ld b,64
-unpack_group:
+    ld c,map_width
+unpack_run:
     ld a,(hl)
     inc hl
-    push bc
-    ld b,4
-unpack_cell:
-    rlca
-    rlca
-    ld c,a
+    ld b,a
     and 3
+    srl b
+    srl b
+    inc b
+unpack_cell:
     ld (de),a
-    inc de
-    ld a,c
+    inc e
+    dec c
+    jr nz,unpack_next
+    ld e,0
+    inc d
+    ld c,map_width
+unpack_next:
     djnz unpack_cell
-    pop bc
-    djnz unpack_group
+    ld a,d
+    cp live_map/256+map_height
+    jr nz,unpack_run
     ret
 
-show_sector_number:
-    ld a,(sector)
-    inc a
-    call digit_tile
-    push af
-    ld hl,&183d
-    call WRTVRM
-    pop af
-    ld hl,&1c3d
-    jp WRTVRM
+; ROM records hold X, Y, kind and amount. Enemy health starts at the amount.
+load_entities:
+    push bc
+    ld a,d
+    cp props/256
+    ld a,1
+    jr nc,load_entity_position
+    push hl
+    pop ix
+    ld a,(ix+3)
+load_entity_position:
+    ld (de),a
+    inc e
+    ld a,&80
+    ld (de),a
+    inc e
+    ld a,(hl)
+    inc hl
+    ld (de),a
+    inc e
+    ld a,&80
+    ld (de),a
+    inc e
+    ld a,(hl)
+    inc hl
+    ld (de),a
+    inc e
+    xor a
+    ld (de),a
+    inc e
+    ldi                           ; kind
+    ldi                           ; amount / key bit mask
+    pop bc
+    djnz load_entities
+    ret
+
+next_enemy:
+    ld a,(enemy_end)
+    jr next_entity
+next_prop:
+    ld a,(prop_end)
+next_entity:
+    ld bc,entity_size
+    add iy,bc
+    push iy
+    pop bc
+    cp c
+    ret
+
+actor_point:
+    push iy
+    pop ix
+    inc ix
+    ret
 
 switch_weapon:
     ld a,(weapon)
     xor 1
     ld (weapon),a
-
-show_weapon_name:
-    ld hl,weapon_names
-    ld a,(weapon)
-    or a
-    jr z,write_weapon_name
-    ld de,7
-    add hl,de
-write_weapon_name:
-    push hl
-    ld de,&182e
-    ld bc,7
-    call LDIRVM
-    pop hl
-    ld de,&1c2e
-    ld bc,7
-    call LDIRVM
+set_weapon_sprite:
+    call mark_dirty
     ld a,(weapon)
     or a
     ld hl,pistol_sprite_body
@@ -148,9 +188,6 @@ set_outcome:
     jp mark_dirty
 
 stage_exit:
-    ld a,(door_open)
-    or a
-    ret z
     ld a,(sector)
     cp sector_count-1
     ld a,2
@@ -179,18 +216,9 @@ render_campaign_panel:
     ld a,(outcome)
     cp 4
     call z,intro_meter_to_view
-    ld hl,hud
-    ld (hl),0
-    ld de,hud+1
-    ld bc,31
-    ldir
     ld a,(outcome)
     cp 1
     ret nz
-    ld hl,hud_template
-    ld de,hud
-    ld bc,hud_life_offset
-    ldir
     jp render_health
 
 ; Channel B mixes a short tone with the weapon noise on channel A.
