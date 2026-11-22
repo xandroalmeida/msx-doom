@@ -18,7 +18,8 @@ reset_level:
     call WRTPSG
     ld a,max_life
     ld (life),a
-    jp set_weapon_sprite
+    call set_weapon_sprite
+    jp music_reset
 
 load_sector:
     ld a,(sector)
@@ -308,6 +309,7 @@ campaign_restart:
     xor a
     ld (sector),a
     ld (title_direction),a
+    ld (music_running),a
     call reset_level
     call blank_for_scene_change
     call load_title_video
@@ -356,7 +358,8 @@ campaign_seed:
     call configure_difficulty
     call blank_for_scene_change
     call load_game_video
-    jp reset_level
+    call reset_level
+    jp music_start
 
 configure_difficulty:
     ld a,(difficulty)
@@ -382,6 +385,7 @@ exit_found:
     ld (outcome),a
     ld e,60
     call event_tone
+    call music_mix
     jp mark_dirty
 
 render_campaign_panel:
@@ -448,11 +452,9 @@ update_event_tone:
     ret z
     dec (hl)
     ret nz
-    ld a,9
-    ld e,0
-    jp WRTPSG
+    jp music_restore_b
 
-; A plays weapon noise, B plays event tones, and C plays the damage cue.
+; A plays weapon noise. B and C mix music with event and damage cues.
 gameplay_mixer:
     ld a,7
     call RDPSG
@@ -511,9 +513,7 @@ damage_backdrop:
 clear_damage_feedback:
     xor a
     ld (damage_phase),a
-    ld e,a
-    ld a,10
-    call WRTPSG
+    call music_restore_c
     ld a,(normal_backdrop)
 write_backdrop:
     ld b,a

@@ -415,6 +415,7 @@ def generate():
     heart_full = tile([(bits, 0x91) for bits in (0, 0x66, 0xff, 0xff, 0x7e, 0x3c, 0x18, 0)])
     legend_panel = panel("legend_panel", [
         (1, 2, label("LEGENDA", 15)),
+        (1, 20, label("T MUSICA", 15)),
         (3, 2, label("TERRENO", 11)),
         (3, 20, label("OBJETOS", 11)),
         *((5 + index * 2, 2, marker_row(name, icon))
@@ -464,7 +465,7 @@ def generate():
     digits = label("0123456789", 15)
     hints = (
         "ACHE CHAVE", "ABRA PORTA", "ACHE SAIDA", "SEM MUN",
-        "MUN EXTRA", "TRANCADA", "CURA EXTRA",
+        "MUN EXTRA", "TRANCADA", "CURA EXTRA", "MUSICA SIM", "MUSICA NAO",
     )
     if any(len(message) > hint_width for message in hints):
         raise ValueError("Mensagem de objetivo excede a largura disponível no HUD.")

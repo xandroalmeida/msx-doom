@@ -14,6 +14,8 @@ A tela de título mostra o Posto Umbra ao anoitecer em pixel art. As estrelas e 
 
 **Sinal de Umbra** é o tema original da tela de título. O arranjo em 7/8 usa os três canais de tom do PSG e mistura percussão de ruído ao baixo. As barras na tela acompanham os canais. A faixa repete a cada 22,4 segundos e silencia ao iniciar a campanha. Ao voltar ao título, ela recomeça do primeiro compasso.
 
+Durante a campanha, **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro** tocam nos respectivos setores. Cada faixa combina melodia e baixo e repete em ciclos de cerca de 26 segundos. A trilha vem ligada. **T** ou **B + direita** alternam a música na partida ou na pausa, com os efeitos sonoros operando normalmente. A preferência acompanha o jogador entre setores e novas tentativas.
+
 ## Jogar
 
 Arraste `build/posto-umbra.rom` para o [WebMSX em modo MSX1 com 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64), ou carregue a mesma ROM no [openMSX](https://openmsx.org/manual/setup.html#cbios).
@@ -33,6 +35,7 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Abrir a porta | Shift | Botão B |
 | Abrir ou fechar o menu de pausa | M | A + B |
 | Mostrar ou ocultar o minimapa durante a partida | N | B + baixo |
+| Ligar ou desligar a trilha da campanha | T | B + direita |
 | Alternar entre mapa e legenda | ← / → | Esquerda / direita |
 | Rolar o mapa de pausa | ↑ / ↓ | Cima / baixo |
 | Reiniciar o setor durante a partida | R | — |
@@ -83,7 +86,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a música a 50 e 60 Hz, a arte animada, a inicialização em subslot, as três dificuldades, a variação de posições e o acesso às chaves. Ela também percorre a campanha com os controles do jogo e verifica combate, cura, derrota, o HUD e o minimapa. A validação em um MSX1 físico ainda está pendente.
+Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a música a 50 e 60 Hz, incluindo as três faixas, seus loops, os atalhos e a retomada após os efeitos sonoros. Também verifica a arte animada, a inicialização em subslot, as três dificuldades, a variação de posições e o acesso às chaves. A validação em um MSX1 físico ainda está pendente.
 
 ## Código
 
@@ -93,6 +96,8 @@ Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifi
 - [Reprodução da abertura no PSG](src/opening.z80)
 - [Pixel art e quadros de animação da abertura](tools/title_art.py)
 - [Partitura em formato editável](tools/opening.py)
+- [Partituras da campanha](tools/music.py)
+- [Reprodução e controle da trilha durante o jogo](src/music.z80)
 - [Combate e interação](src/combat.z80)
 - [Projeção de objetos e HUD](src/objects.z80)
 - [Legenda e mapa](src/menu.z80)

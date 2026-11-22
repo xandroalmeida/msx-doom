@@ -126,9 +126,11 @@ start:
     ld (sector),a
     ld (title_direction),a
     ld (display_pending),a
+    ld (music_running),a
     inc a
     ld (minimap),a
     ld (difficulty),a
+    ld (music_enabled),a
     ld hl,1
     ld (level_seed),hl
     call configure_difficulty
@@ -152,6 +154,7 @@ main_loop:
 tick_check:
     call intro_tick
     call update_damage_feedback
+    call music_tick
     ld a,(JIFFY)
     ld b,a
     ld a,(last_tick)
@@ -786,6 +789,11 @@ next_ray:
     ld hl,column
     inc (hl)
     ld a,(hl)
+    cp 16
+    jr nz,ray_batch_done
+    call music_tick               ; give the score a chance to advance during a long frame
+    jp render_column
+ray_batch_done:
     cp 32
     jp nz,render_column
 

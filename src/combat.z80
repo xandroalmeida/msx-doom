@@ -38,11 +38,18 @@ joy_weapon:
     call GTSTCK
     cp 1
     jr z,joy_switch_weapon
+    cp 3
+    jr z,joy_music
     cp 5
     jr nz,keyboard_fire
     ld hl,pressed
     res 1,(hl)
     set 5,(hl)                    ; B + down toggles the live minimap
+    jr keyboard_fire
+joy_music:
+    ld hl,pressed
+    res 1,(hl)
+    set 6,(hl)                    ; B + right toggles the gameplay soundtrack
     jr keyboard_fire
 joy_switch_weapon:
     ld hl,pressed
@@ -64,10 +71,14 @@ keyboard_use:
     set 1,(hl)
 keyboard_weapon:
     ld a,5
-    call SNSMAT                    ; X is row 5, bit 5
+    call SNSMAT                    ; T and X share row 5
+    ld hl,pressed
+    bit 1,a
+    jr nz,keyboard_x
+    set 6,(hl)
+keyboard_x:
     bit 5,a
     jr nz,keyboard_menu
-    ld hl,pressed
     set 3,(hl)
 keyboard_menu:
     ld a,4
@@ -100,9 +111,20 @@ current_buttons:
     ld a,(pressed)
     bit 2,a
     jp nz,toggle_menu
+    bit 6,a
+    jr z,menu_buttons
+    ld a,(outcome)
+    or a
+    jp z,toggle_music
+menu_buttons:
     ld a,(menu_state)
     or a
-    jp nz,menu_tick
+    jr z,campaign_buttons
+    ld a,(buttons)
+    bit 6,a
+    ret nz
+    jp menu_tick
+campaign_buttons:
     ld a,(outcome)
     or a
     jr z,play_tick
@@ -117,7 +139,7 @@ play_tick:
     bit 5,a
     jr nz,toggle_minimap
     ld a,(buttons)
-    bit 5,a
+    and &60
     call z,read_controls
     call check_location
     ld a,(outcome)
@@ -420,6 +442,7 @@ reach_ready:
     jp nz,mark_dirty
     ld a,1
     ld (outcome),a
+    call music_mix
     jp mark_dirty
 chase_player:
     call test_actor_kind

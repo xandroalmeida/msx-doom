@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from opening import score_data
+from music import gameplay_score
 from tables import FONT, data, generate
 from title_art import title_data
 
@@ -24,8 +25,9 @@ def main():
     source = output / "posto-umbra.generated.z80"
     modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80", "campaign.z80", "opening.z80")
     assembly = "\n".join((ROOT / "src" / module).read_text() for module in modules)
-    source.write_text(assembly + "\n" + generate() + score_data()
-                      + "\n    ds align 16384\n" + title_data(data, FONT) + "\nrom_end:\n")
+    music = (ROOT / "src" / "music.z80").read_text()
+    source.write_text("\n".join((assembly, generate(), score_data(), "    ds align 16384",
+                                 title_data(data, FONT), music, gameplay_score(), "rom_end:\n")))
     binary = output / "posto-umbra.bin"
     assembler = [args.assembler]
     if args.assembler.endswith(".py"):

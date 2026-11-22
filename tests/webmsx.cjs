@@ -95,14 +95,14 @@ function boot(frequency, subslot) {
         VDP_CLOCK_MODE: 1,
     });
     const machine = new wmsx.Machine();
-    const inputs = { keys: 0, stick: 0, shift: false, menu: false, weapon: false, retry: false, minimap: false };
+    const inputs = { keys: 0, stick: 0, shift: false, menu: false, weapon: false, retry: false, minimap: false, music: false };
     machine.getControllersSocket().connectControls({
         resetControllers: noop,
         readKeyboardPort(row) {
             if (row === 8) return 255 ^ inputs.keys;
             if (row === 6 && inputs.shift) return 254;
             if (row === 4) return 255 ^ (inputs.menu ? 4 : 0) ^ (inputs.retry ? 128 : 0) ^ (inputs.minimap ? 8 : 0);
-            if (row === 5 && inputs.weapon) return 223;
+            if (row === 5) return 255 ^ (inputs.weapon ? 32 : 0) ^ (inputs.music ? 2 : 0);
             return 255;
         },
         readControllerPort: (port) => port === 0 ? 255 ^ inputs.stick : 255,
@@ -222,6 +222,8 @@ const state = {
     outcome: 0xf119, hint: 0xf11a, flash: 0xf11b, menu: 0xf125, sector: 0xf126, weapon: 0xf12a, minimap: 0xf127,
     difficulty: 0xf145, sight: 0xf147, attackDelay: 0xf148, chaseDelay: 0xf149, seed: 0xf14a,
     titlePhase: 0xf150,
+    musicEnabled: 0xf151, musicPhase: 0xf154, musicLoop: 0xf156, musicNext: 0xf158, musicB: 0xf15a, musicC: 0xf15c,
+    eventTimer: 0xf128,
     wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400,
 };
 const up = 0x20;
@@ -482,7 +484,7 @@ function checkDamageFeedback(demo, frequency) {
     assert.ok(flashVisible && darkRedSeen, "O clarão deve aparecer no cenário e escurecer antes de sumir.");
     assert.ok(lowerTone && mixedShot, "O som de dano deve descer e tocar junto com o disparo.");
     assert.equal(demo.video().regs[7], baseline);
-    assert.equal(psg()[10], 0);
+    checkMusicVoice(demo, 2);
     checkHealthHud(demo, 4);
 }
 
@@ -583,8 +585,9 @@ function checkOpening(frequency) {
 
     press(demo, "keys", space);
     assert.equal(demo.read(state.outcome), 0);
-    assert.deepEqual([...psg().subarray(8, 11)], [0, 0, 0], "A abertura deve silenciar ao jogar.");
-    assert.equal(psg()[7] & 0x3f, 0x3f);
+    assert.equal(psg()[8], 0, "A trilha deve reservar o canal A para os disparos.");
+    assert.ok(psg()[9] || psg()[10], "A música do setor deve começar ao jogar.");
+    assert.equal(psg()[7] & 0x3f, 0x31);
     assert.equal(word(0xf132), scorePosition, "O leitor da faixa deve ficar parado durante a partida.");
     checkWeapon(demo, 0);
     checkVideo(demo);
@@ -811,6 +814,93 @@ function openArena(frequency, enemies, props = [[11, 10, 0, 6]]) {
     return demo;
 }
 
+function wordAt(demo, address) {
+    return demo.read(address) | demo.read(address + 1) << 8;
+}
+
+function psgRegisters(demo) {
+    return Buffer.from(demo.machine.psg.saveState().r, "base64");
+}
+
+function checkMusicVoice(demo, channel) {
+    const sound = wordAt(demo, channel === 1 ? state.musicB : state.musicC);
+    const psg = psgRegisters(demo);
+    const gain = demo.read(state.musicEnabled) ? sound >> 12 : 0;
+    assert.equal(psg[8 + channel], gain, "O canal deve voltar à trilha após o efeito.");
+    if (gain) assert.equal(psg.readUInt16LE(channel * 2), sound & 0xfff);
+}
+
+function checkMusicControls(frequency) {
+    const demo = openArena(frequency, [[12, 12, 0, 2]], [[5, 11, 0, 6]]);
+    assert.equal(demo.read(state.musicEnabled), 1);
+    const before = wordAt(demo, state.musicNext);
+    press(demo, "music", true);
+    assert.equal(demo.read(state.musicEnabled), 0);
+    assert.equal(demo.read(state.hint), 8);
+    checkMusicVoice(demo, 1);
+    checkMusicVoice(demo, 2);
+    assert.notEqual(wordAt(demo, state.musicNext), before, "A faixa deve avançar mesmo silenciada.");
+
+    const position = demo.xy();
+    const heading = demo.read(state.heading);
+    press(demo, "stick", 0x28); // B + right
+    assert.equal(demo.read(state.musicEnabled), 1);
+    assert.equal(demo.read(state.hint), 7);
+    assert.equal(demo.read(state.heading), heading);
+    assert.deepEqual(demo.xy(), position);
+    checkMusicVoice(demo, 1);
+    checkMusicVoice(demo, 2);
+
+    demo.inputs.keys = up;
+    for (let i = 0; i < 180 && !demo.read(state.eventTimer); i++) demo.run(1);
+    demo.inputs.keys = 0;
+    assert.ok(demo.read(state.eventTimer), "A caixa deve tocar sua indicação sonora.");
+    assert.equal(psgRegisters(demo)[2], 110);
+    assert.equal(psgRegisters(demo)[9], 9);
+    demo.run(20);
+    assert.equal(demo.read(state.eventTimer), 0);
+    checkMusicVoice(demo, 1);
+
+    press(demo, "menu", true);
+    press(demo, "stick", 0x28);
+    assert.equal(demo.read(state.menu), 2, "Alternar a música não deve trocar a aba do mapa.");
+    assert.equal(demo.read(state.musicEnabled), 0);
+    press(demo, "menu", true);
+    press(demo, "retry", true);
+    assert.equal(demo.read(state.musicEnabled), 0, "Reiniciar deve conservar a preferência de áudio.");
+    checkMusicVoice(demo, 1);
+    checkMusicVoice(demo, 2);
+}
+
+function checkTrack(demo, sector, frequency) {
+    const start = romAddress(`game_music_${sector}`);
+    const end = romAddress(sector === 2 ? "rom_end" : `game_music_${sector + 1}`);
+    const interval = romTiles("game_music_tracks", 9)[sector * 3 + 2];
+    const frames = (end - start - 2) / 4;
+    assert.equal(wordAt(demo, state.musicLoop), start);
+    press(demo, "menu", true);
+    let previous = wordAt(demo, state.musicNext);
+    const played = (previous - start) / 4 - 1;
+    const expected = ((frames - played) * interval - demo.read(state.musicPhase)) * frequency / 300;
+    const pitches = [new Set(), new Set()];
+    let elapsed = 0;
+    for (; elapsed < Math.ceil(expected) + 6; elapsed++) {
+        demo.run(1);
+        const current = wordAt(demo, state.musicNext);
+        if (current === previous) continue;
+        if (current < previous) break;
+        previous = current;
+        const psg = psgRegisters(demo);
+        for (let channel = 1; channel <= 2; channel++) {
+            if (psg[8 + channel]) pitches[channel - 1].add(psg.readUInt16LE(channel * 2));
+        }
+    }
+    assert.equal(wordAt(demo, state.musicNext), start + 4, "A faixa deve voltar ao primeiro quadro.");
+    assert.ok(Math.abs(elapsed + 1 - expected) < 3, "O loop deve respeitar o tempo nos dois padrões de vídeo.");
+    assert.ok(pitches.every((voice) => voice.size >= 5), "Melodia e baixo devem apresentar notas variadas.");
+    press(demo, "menu", true);
+}
+
 function checkArena(frequency) {
     const demo = openArena(frequency, [[5, 8, 0, 2], [11, 8, 1, 4]], [[6, 12, 0, 6], [7, 12, 1, 2]]);
     assert.ok(creatureTileCount(demo) > 0);
@@ -874,6 +964,7 @@ function checkArena(frequency) {
     checkVideo(blocked);
 
     const damage = openArena(frequency, [[5, 8, 0, 2]]);
+    if (frequency === 50) press(damage, "music", true);
     checkDamageFeedback(damage, frequency);
     if (frequency === 60 && healthPath) saveFrame(damage.frame, healthPath);
     holdUntil(damage, up, () => damage.read(state.outcome) === 1, 1000);
@@ -983,6 +1074,7 @@ function playCampaign(frequency) {
     for (let sector = 0; sector < names.length; sector++) {
         checkSector(demo, sector, difficulty);
         checkPlacement(demo);
+        checkTrack(demo, sector, frequency);
         const props = entities(demo, state.props, state.propEnd);
         const keys = props.filter(({ kind }) => kind === 2).sort((a, b) => a.arg - b.arg);
         const gates = props.filter(({ kind }) => kind === 3).sort((a, b) => a.arg - b.arg);
@@ -1041,7 +1133,8 @@ for (const frequency of [60, 50]) {
     checkWallEdges(frequency, 2, 16);
     checkSlopedWall(frequency, frequency === 60 ? 1 : 2);
     checkMinimap(frequency);
+    checkMusicControls(frequency);
     checkArena(frequency);
     playCampaign(frequency);
-    console.log(`MSX1 64 KiB, ${frequency} Hz: campanha, portas, chaves, combate, cura, mapa e PSG OK.`);
+    console.log(`MSX1 64 KiB, ${frequency} Hz: campanha, portas, chaves, combate, cura, mapa e três faixas OK.`);
 }

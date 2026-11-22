@@ -59,20 +59,24 @@ STEPS_PER_BAR = 14
 PSG_CLOCK = 1_789_772.5
 
 
+def psg_period(note):
+    semitone = "C C# D D# E F F# G G# A A# B".split().index(note[:-1])
+    midi = 12 * (int(note[-1]) + 1) + semitone
+    frequency = 440 * 2 ** ((midi - 69) / 12)
+    period = round(PSG_CLOCK / (16 * frequency))
+    if not 1 <= period <= 4095:
+        raise ValueError(f"Nota fora do alcance do PSG: {note}")
+    return period
+
+
 def score_data():
     periods = [0]
     notes = {".": 0}
 
     def note_id(note):
         if note not in notes:
-            semitone = "C C# D D# E F F# G G# A A# B".split().index(note[:-1])
-            midi = 12 * (int(note[-1]) + 1) + semitone
-            frequency = 440 * 2 ** ((midi - 69) / 12)
-            period = round(PSG_CLOCK / (16 * frequency))
-            if not 1 <= period <= 4095:
-                raise ValueError(f"Nota fora do alcance do PSG: {note}")
             notes[note] = len(periods)
-            periods.append(period)
+            periods.append(psg_period(note))
         return notes[note]
 
     patterns = []

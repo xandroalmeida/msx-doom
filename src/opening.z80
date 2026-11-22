@@ -36,11 +36,11 @@ intro_start:
 intro_stop:
     ld e,0
     ld a,8
-    call intro_psg
+    call write_psg
     ld a,9
-    call intro_psg
+    call write_psg
     ld a,10
-    call intro_psg
+    call write_psg
     ld a,&3f
     jp intro_mixer
 
@@ -173,7 +173,7 @@ intro_play_step:
     jr z,intro_tones_only
     ld e,a
     ld a,6
-    call intro_psg
+    call write_psg
     ld a,(intro_vol_c)
     or a
     ld a,&18                       ; mix percussion noise into channel C
@@ -189,11 +189,11 @@ intro_volumes:
     ld a,(intro_vol_a)
     ld e,a
     ld a,8
-    call intro_psg
+    call write_psg
     ld a,(intro_vol_b)
     ld e,a
     ld a,9
-    call intro_psg
+    call write_psg
     ld a,(intro_drum)
     or a
     ld a,12
@@ -202,7 +202,7 @@ intro_volumes:
 intro_write_bass:
     ld e,a
     ld a,10
-    call intro_psg
+    call write_psg
     jp draw_intro_meters
 
 intro_release:
@@ -215,7 +215,7 @@ intro_release_voice:
     srl a
     ld e,a
     ld a,c
-    call intro_psg
+    call write_psg
     inc hl
     inc c
     ld a,c
@@ -235,11 +235,11 @@ intro_pitch:
     add hl,de
     ld e,(hl)
     ld a,c
-    call intro_psg
+    call write_psg
     inc hl
     ld e,(hl)
     inc a                          ; paired high tone register
-    call intro_psg
+    call write_psg
     pop hl
     ld a,b
     ret
@@ -251,7 +251,7 @@ intro_mixer:
     ld e,a
     ld a,7
 
-intro_psg:
+write_psg:
     push af
     push bc
     push de
