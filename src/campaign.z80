@@ -1,0 +1,288 @@
+reset_level:
+    call load_sector
+    call clear_damage_feedback
+    xor a
+    ld (heading),a
+    ld (door_open),a
+    ld (outcome),a
+    ld (hint),a
+    ld (flash),a
+    ld (effect_timer),a
+    ld (weapon),a
+    ld e,a
+    ld a,8
+    call WRTPSG
+    ld e,0
+    ld a,9
+    call WRTPSG
+    ld a,1
+    ld (supplies),a
+    ld (dirty),a
+    ld a,(initial_ammo)
+    ld (ammo),a
+    ld a,(needs_key)
+    ld (key_waiting),a
+    ld a,max_life
+    ld (life),a
+    call show_sector_number
+    jp show_weapon_name
+
+load_sector:
+    ld a,(sector)
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,sector_records
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    push de                       ; packed map pointer
+    ld de,player_x
+    ld bc,4
+    ldir
+    ld de,enemy_hp
+    ld bc,6
+    ldir
+    ld de,enemy_brute
+    ld bc,6
+    ldir
+    ld de,door_point
+    ld bc,needs_key-door_point+1
+    ldir
+    pop hl
+    ld de,live_map
+    ld b,64
+unpack_group:
+    ld a,(hl)
+    inc hl
+    push bc
+    ld b,4
+unpack_cell:
+    rlca
+    rlca
+    ld c,a
+    and 3
+    ld (de),a
+    inc de
+    ld a,c
+    djnz unpack_cell
+    pop bc
+    djnz unpack_group
+    ret
+
+show_sector_number:
+    ld a,(sector)
+    inc a
+    call digit_tile
+    push af
+    ld hl,&183d
+    call WRTVRM
+    pop af
+    ld hl,&1c3d
+    jp WRTVRM
+
+switch_weapon:
+    ld a,(weapon)
+    xor 1
+    ld (weapon),a
+
+show_weapon_name:
+    ld hl,weapon_names
+    ld a,(weapon)
+    or a
+    jr z,write_weapon_name
+    ld de,7
+    add hl,de
+write_weapon_name:
+    push hl
+    ld de,&182e
+    ld bc,7
+    call LDIRVM
+    pop hl
+    ld de,&1c2e
+    ld bc,7
+    call LDIRVM
+    ld a,(weapon)
+    or a
+    ld hl,pistol_sprite_body
+    jr z,write_weapon_sprites
+    ld hl,pulse_sprite_body
+write_weapon_sprites:
+    ld de,&1b08
+    ld bc,16
+    jp LDIRVM
+
+campaign_action:
+    ld a,(pressed)
+    bit 0,a
+    ret z
+    ld a,(outcome)
+    cp 4
+    jr z,leave_title
+    cp 3
+    jr z,campaign_restart
+    cp 2
+    jr nz,load_next
+    ld hl,sector
+    inc (hl)
+load_next:
+    jp reset_level
+campaign_restart:
+    xor a
+    ld (sector),a
+    call reset_level
+    call intro_start
+    ld a,4
+    jr set_outcome
+leave_title:
+    call intro_stop
+    xor a
+set_outcome:
+    ld (outcome),a
+    jp mark_dirty
+
+stage_exit:
+    ld a,(door_open)
+    or a
+    ret z
+    ld a,(sector)
+    cp sector_count-1
+    ld a,2
+    jr nz,exit_found
+    inc a
+exit_found:
+    ld (outcome),a
+    ld e,60
+    call event_tone
+    jp mark_dirty
+
+render_campaign_panel:
+    call clear_view
+    ld a,(outcome)
+    dec a
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,campaign_panels
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
+    call draw_panel
+    ld a,(outcome)
+    cp 4
+    call z,intro_meter_to_view
+    ld hl,hud
+    ld (hl),0
+    ld de,hud+1
+    ld bc,31
+    ldir
+    ld a,(outcome)
+    cp 1
+    ret nz
+    ld hl,hud_template
+    ld de,hud
+    ld bc,hud_life_offset
+    ldir
+    jp render_health
+
+; Channel B mixes a short tone with the weapon noise on channel A.
+event_tone:
+    ld a,2
+    call WRTPSG
+    ld a,3
+    ld e,0
+    call WRTPSG
+    call gameplay_mixer
+    ld a,9
+    ld e,9
+    call WRTPSG
+    ld a,3
+    ld (effect_timer),a
+    ret
+
+update_event_tone:
+    ld hl,effect_timer
+    ld a,(hl)
+    or a
+    ret z
+    dec (hl)
+    ret nz
+    ld a,9
+    ld e,0
+    jp WRTPSG
+
+; A plays weapon noise, B plays event tones, and C plays the damage cue.
+gameplay_mixer:
+    ld a,7
+    call RDPSG
+    and &c0
+    or &31
+    ld e,a
+    ld a,7
+    jp WRTPSG
+
+start_damage_feedback:
+    ld a,(JIFFY)
+    ld (damage_started),a
+    ld a,1
+    ld (damage_phase),a
+    ld e,9                        ; light red for the impact
+    call damage_backdrop
+    call gameplay_mixer
+    ld a,4
+    ld e,126
+    call WRTPSG
+    ld a,5
+    ld e,0
+    call WRTPSG
+    ld a,10
+    ld e,12
+    jp WRTPSG
+
+update_damage_feedback:
+    ld a,(damage_phase)
+    or a
+    ret z
+    ld hl,damage_started
+    ld a,(JIFFY)
+    sub (hl)
+    cp 12
+    jr nc,clear_damage_feedback
+    cp 4
+    ret c
+    ld a,(damage_phase)
+    cp 1
+    ret nz
+    inc a
+    ld (damage_phase),a
+    ld e,6                        ; dark red for the tail of the flash
+    call damage_backdrop
+    ld a,4
+    ld e,224
+    jp WRTPSG
+
+damage_backdrop:
+    ld a,(normal_backdrop)
+    and &f0
+    or e
+    jr write_backdrop
+
+clear_damage_feedback:
+    xor a
+    ld (damage_phase),a
+    ld e,a
+    ld a,10
+    call WRTPSG
+    ld a,(normal_backdrop)
+write_backdrop:
+    ld b,a
+    ld c,7
+    jp WRTVDP

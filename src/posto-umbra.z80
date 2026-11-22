@@ -13,6 +13,7 @@ SNSMAT:    equ &0141
 JIFFY:     equ &fc9e
 BAKCLR:    equ &f3ea
 BDRCLR:    equ &f3eb
+RG7SAV:    equ &f3e6
 
 view:       equ &c000             ; 32 x 16 tile names
 player_x:   equ &c200             ; unsigned 8.8 world coordinates
@@ -35,7 +36,7 @@ enemy_y:    equ &c214
 enemy_wait: equ &c216
 supplies:   equ &c217
 door_open:  equ &c218
-outcome:    equ &c219             ; 0 playing, 1 dead, 2 escaped
+outcome:    equ &c219             ; 0 playing, 1 dead, 2 clear, 3 final, 4 title
 hint:       equ &c21a
 flash:      equ &c21b
 line_x:     equ &c21c
@@ -44,9 +45,31 @@ line_dx:    equ &c220
 line_dy:    equ &c222
 line_count: equ &c224
 menu_state: equ &c225             ; 0 game, 1 legend, 2 map
+sector:     equ &c226
+key_waiting: equ &c227
+effect_timer: equ &c228
+ray_quadrant: equ &c229
+weapon:       equ &c22a             ; 0 pistol, 1 pulse
+shot_width:   equ &c22b
+damage_started: equ &c23a
+damage_phase: equ &c23b            ; 0 inactive, 1 impact, 2 low tone
+normal_backdrop: equ &c23c
+enemy_brute: equ &c290            ; same layout as enemy_hp through enemy_wait
+door_point:  equ &c2a0
+exit_point:  equ &c2a4
+ammo_point:  equ &c2a8
+key_point:   equ &c2ac
+door_index:  equ &c2b0
+initial_ammo: equ &c2b1
+needs_key:    equ &c2b2
+
+actor_hp:   equ 0
+actor_x:    equ 1
+actor_y:    equ 3
+actor_wait: equ 5
 hud:        equ &c240             ; one row immediately below the viewport
 wall_depth: equ &c260             ; one distance per screen column
-wall_faces: equ &c2c0             ; wall pass scratch, available to objects afterwards
+wall_faces: equ object_queue      ; reused before the object pass
 live_map:   equ &c300             ; one aligned page for terrain and door
 view_size:  equ 512
 radius:     equ 32
@@ -62,18 +85,25 @@ start:
     ld (BDRCLR),a
     ld a,2
     call CHGMOD
+    ld a,(RG7SAV)
+    ld (normal_backdrop),a
     call DISSCR
     call init_video
     xor a
     ld (buttons),a
     ld (shown),a
     ld (menu_state),a
+    ld (sector),a
     call reset_level
+    call intro_start
+    ld a,4
+    ld (outcome),a
     ld a,6
     ld (front_page),a
     call render_scene
     ld de,&1880
     call copy_frame
+    call show_game_sprites
     call ENASCR
     ei
     ld a,(JIFFY)
@@ -82,6 +112,8 @@ start:
 main_loop:
     halt
 tick_check:
+    call intro_tick
+    call update_damage_feedback
     ld a,(JIFFY)
     ld b,a
     ld a,(last_tick)
@@ -179,15 +211,23 @@ sprite_patterns:
     db &10,&92,&54,&38,&7c,&54,&92,&10
     db &00,&01,&01,&02,&02,&04,&04,&08
     db &00,&80,&80,&40,&40,&20,&20,&10
+    db &07,&04,&07,&1f,&37,&3f,&3f,&7f
+    db &e0,&20,&e0,&f8,&ec,&fc,&fc,&fe
+    db &7f,&6f,&7f,&77,&7f,&ff,&ff,&ff
+    db &fe,&f6,&fe,&ee,&fe,&ff,&ff,&ff
 sprite_patterns_end:
 sprites:
     db 92,124,0,15
     db 209,124,5,11               ; muzzle flash, hidden until a shot
+pistol_sprite_body:
     db 143,120,1,14, 143,128,2,14
     db 151,120,3,14, 151,128,4,14
     db 143,120,6,5, 143,128,7,5
     db 208
 sprites_end:
+pulse_sprite_body:
+    db 143,120,8,7, 143,128,9,7
+    db 151,120,10,7, 151,128,11,7
 
 read_direction:
     xor a
@@ -343,6 +383,10 @@ cell:
 
 render_view:
     ld a,(heading)
+    and &30                       ; the other quadrants rotate the first 16 headings
+    ld (ray_quadrant),a
+    ld a,(heading)
+    and 15
     ld h,a
     ld l,0                       ; 32 rays * 2 bytes = 64 bytes per direction
     srl h
@@ -357,18 +401,42 @@ render_view:
 render_column:
     ld hl,(ray_cursor)
     ld e,(hl)
+    inc hl
+    ld c,(hl)
+    inc hl
+    ld (ray_cursor),hl
+    ld a,(ray_quadrant)
+    or a
+    jr z,extend_ray
+    cp &20
+    jr z,ray_reverse
+    ld a,e                        ; swap X and Y for 90/270 degrees
+    ld e,c
+    ld c,a
+    jr nc,negate_ray_y
+    jr negate_ray_x
+ray_reverse:
+    ld a,c
+    neg
+    ld c,a
+negate_ray_x:
+    ld a,e
+    neg
+    ld e,a
+    jr extend_ray
+negate_ray_y:
+    ld a,c
+    neg
+    ld c,a
+extend_ray:
     ld a,e
     add a,a
     sbc a,a
     ld d,a
-    inc hl
-    ld c,(hl)
     ld a,c
     add a,a
     sbc a,a
     ld b,a
-    inc hl
-    ld (ray_cursor),hl
     push bc
     exx
     pop de

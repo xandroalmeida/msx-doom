@@ -2,28 +2,64 @@
 
 from math import cos, pi, sin
 
-WORLD = (
-    "################",
-    "##.......#######",
-    "##........######",
-    "##...E.....#####",
-    "##.........#####",
-    "#####D##########",
-    "#..+...+.......#",
-    "#..#...#...##..#",
-    "#......+...##..#",
-    "#..............#",
-    "#..#+..#+......#",
-    "#..#+..#+......#",
-    "#..............#",
-    "#.....#.....+..#",
-    "#.....#.....+..#",
-    "################",
+SECTORS = (
+    (
+        "################",
+        "##.......#######",
+        "##........######",
+        "##...E.....#####",
+        "##.........#####",
+        "#####D##########",
+        "#..+...+.......#",
+        "#..#...#...##..#",
+        "#....M.+...##..#",
+        "#..............#",
+        "#..#+..#+......#",
+        "#..#+A.#+......#",
+        "#....P.........#",
+        "#.....#.....+..#",
+        "#.....#.....+..#",
+        "################",
+    ),
+    (
+        "################",
+        "#######.......##",
+        "#######.......##",
+        "#######...E...##",
+        "#######.......##",
+        "##########D#####",
+        "#.....##.......#",
+        "#..+...+..K....#",
+        "#..M.....B.....#",
+        "#..............#",
+        "#....++.....++.#",
+        "#..A.#....###..#",
+        "#..P.#.........#",
+        "#.....##.......#",
+        "#..............#",
+        "################",
+    ),
+    (
+        "################",
+        "##.....#########",
+        "##..E..#########",
+        "##.....#########",
+        "####D###########",
+        "#..............#",
+        "#......##......#",
+        "#...K..##......#",
+        "#..+........+..#",
+        "#....M.....B...#",
+        "#..++.....+.+..#",
+        "#......#.......#",
+        "#......#...A...#",
+        "#..........P...#",
+        "#..............#",
+        "################",
+    ),
 )
 RAY_LIMIT = 160
-START = (5, 12)
-MONSTER = (5, 8)
-AMMO = (5, 11)
+MAX_LIFE = 5
 TERRAIN = (
     (".", "CHAO LIVRE", None),
     ("#", "PAREDE AZUL", (4, 5, 7, 1)),
@@ -155,10 +191,48 @@ BEACON = (
     "....########....",
     "................",
 )
+BRUTE = (
+    "....########....",
+    "...##########...",
+    "....##.##.##....",
+    "....########....",
+    "...####..####...",
+    ".##############.",
+    "################",
+    "###.########.###",
+    "###.########.###",
+    "###.########.###",
+    "##..########..##",
+    "....###..###....",
+    "....###..###....",
+    "....###..###....",
+    "...####..####...",
+    "...####..####...",
+)
+KEY = (
+    "................",
+    "................",
+    "....#####.......",
+    "...#######......",
+    "...##...##......",
+    "...##...##......",
+    "...#######......",
+    "....##########..",
+    "........######..",
+    "..........##....",
+    "..........##....",
+    "................",
+    "................",
+    "................",
+    "................",
+    "................",
+)
 OBJECT_ART = (
     ("creature", "MONSTRO", CREATURE, 9),
     ("ammo", "MUNICAO", SUPPLY, 10),
     ("exit", "SAIDA", BEACON, 3),
+    ("brute", "BRUTO", BRUTE, 13),
+    ("key", "CHAVE", KEY, 11),
 )
 
 
@@ -182,19 +256,59 @@ def panel_data(field, rows):
     return data(field, (*blocks, 0))
 
 
-def generate():
-    terrain_chars = "".join(mark for mark, _, _ in TERRAIN)
-    if (
-        len(WORLD) != 16
-        or any(len(row) != 16 or row[0] not in "#+" or row[-1] not in "#+" for row in WORLD)
-        or set(WORLD[0] + WORLD[-1]) - set("#+")
-        or any(WORLD[y][x] != "." for x, y in (START, MONSTER, AMMO))
-        or set("".join(WORLD)) - set(terrain_chars + "E")
-        or sum(row.count("D") for row in WORLD) != 1
-        or sum(row.count("E") for row in WORLD) != 1
-    ):
-        raise ValueError("O mapa exige borda sólida, 16 × 16 células e início livre.")
+def level_data():
+    def point(index, x_fraction=128):
+        return (x_fraction, index & 15, 128, index >> 4)
 
+    def reachable(world, start, door_open):
+        reached = {start}
+        frontier = [start]
+        while frontier:
+            current = frontier.pop()
+            for neighbor in (current - 16, current + 16, current - 1, current + 1):
+                if neighbor in reached or world[neighbor] in (("#", "+") if door_open else ("#", "+", "D")):
+                    continue
+                reached.add(neighbor)
+                frontier.append(neighbor)
+        return reached
+
+    terrain = "".join(mark for mark, _, _ in TERRAIN)
+    maps, records = [], []
+    for index, rows in enumerate(SECTORS):
+        world = "".join(rows)
+        if (len(rows) != 16 or any(len(row) != 16 or row[0] not in "#+" or row[-1] not in "#+" for row in rows)
+                or set(rows[0] + rows[-1]) - set("#+")
+                or set(world) - set(terrain + "PMBAKE")
+                or any(world.count(mark) != 1 for mark in ("PMABKDE" if index else "PMADE"))
+                or (index == 0 and ("K" in world or "B" in world))):
+            raise ValueError(f"Terreno ou marcadores inválidos no setor {index + 1}.")
+        cells = {mark: world.index(mark) for mark in "PMBAKDE" if mark in world}
+        before = reachable(world, cells["P"], door_open=False)
+        after = reachable(world, cells["P"], door_open=True)
+        if any(cell not in before for mark, cell in cells.items() if mark not in "DE") or (
+            cells["E"] in before or cells["E"] not in after
+        ):
+            raise ValueError(f"Rota inválida no setor {index + 1}.")
+        codes = [terrain.index(mark) if mark in terrain else 0 for mark in world]
+        packed = [sum(codes[offset + i] << (6 - i * 2) for i in range(4))
+                  for offset in range(0, 256, 4)]
+        maps.append(data(f"sector_map_{index}", packed))
+        brute = (3 if index == 1 else 4, *point(cells["B"]), 0) if index else (0,) * 6
+        records.append("\n".join((
+            f"sector_{index}:",
+            f"    dw sector_map_{index}",
+            "    db " + ",".join(str(value) for value in (
+                *point(cells["P"]), 2, *point(cells["M"]), 0, *brute,
+                *point(cells["D"]), *point(cells["E"]), *point(cells["A"], 32),
+                *point(cells.get("K", 0)),              # unused when no key is required
+                cells["D"], (2, 5, 6)[index], int(index != 0),
+            )),
+        )))
+    pointers = data("sector_records", (f"sector_{i}" for i in range(len(SECTORS))), "dw")
+    return "\n".join((f"sector_count: equ {len(SECTORS)}", pointers, *records, *maps))
+
+
+def generate():
     patterns, colors = bytearray(), bytearray()
     tile_ids = {}
 
@@ -208,8 +322,10 @@ def generate():
 
     blank = tile([(0, 0x11)] * 8)
     stripe = tile([(0, 0x11)] * 6 + [(0, 0x77), (0, 0x11)])
-    ceiling = [(0, 0x11)] * 8
-    floor = [(0x22 if y % 2 else 0x88, 0x41) for y in range(8)]
+    # Transparent ground/ceiling pixels normally show the black backdrop.
+    # When the player takes damage they show the red VDP backdrop instead.
+    ceiling = [(0, 0x00)] * 8
+    floor = [(0x22 if y % 2 else 0x88, 0x40) for y in range(8)]
     terrain_tiles = [tile(floor)]
 
     # Two-pixel clipping leaves room in the tile bank for both corner styles.
@@ -311,19 +427,24 @@ def generate():
     map_panel = panel_data("map_panel", [
         (1, 20, label("MAPA", 7)),
         (3, 20, [directions[0], blank, *label("NORTE", 11)]),
-        *((6 + index * 2, 20, marker_row(name, icon))
+        *((5 + index * 2, 20, marker_row(name, icon))
           for index, (_, name, icon) in enumerate(markers)),
     ])
     menu_hud = label(" ESQ LEGENDA DIR MAPA M VOLTAR ".ljust(32), 15)
 
-    def screen_message(message, color):
-        line = [blank] * 32
-        start = (32 - len(message)) // 2
-        line[start:start + len(message)] = label(message, color)
-        return line
+    def story_panel(field, title, detail, action, accent=7):
+        return panel_data(field, [
+            (3, (32 - len(title)) // 2, label(title, accent)),
+            (7, (32 - len(detail)) // 2, label(detail, 15)),
+            (12, (32 - len(action)) // 2, label(action, 11)),
+        ])
 
-    defeat = screen_message("VOCE CAIU   ESP REINICIA", 9)
-    victory = screen_message("SETOR SEGURO   ESP REINICIA", 3)
+    campaign_panels = (
+        story_panel("death_panel", "VOCE CAIU", "O SETOR AINDA ESTA TOMADO", "ESP TENTAR DE NOVO", 9),
+        story_panel("clear_panel", "SETOR SEGURO", "A ROTA ESTA LIVRE", "ESP PROXIMO SETOR", 7),
+        story_panel("last_panel", "POSTO RECUPERADO", "CAMPANHA CONCLUIDA", "ESP VOLTAR AO INICIO", 7),
+        story_panel("title_panel", "POSTO UMBRA", "SINAL DE UMBRA", "ESP INICIAR CAMPANHA", 7),
+    )
     chrome = [blank] * (24 * 32)
 
     def write_chrome(row, col, tiles):
@@ -331,11 +452,21 @@ def generate():
         chrome[offset:offset + len(tiles)] = tiles
 
     write_chrome(1, 2, label("POSTO UMBRA", 7))
-    write_chrome(1, 22, label("SETOR 07", 11))
+    write_chrome(1, 22, label("SETOR 01", 11))
     write_chrome(2, 2, [stripe] * 28)
     write_chrome(20, 2, [stripe] * 28)
     write_chrome(23, 2, label("ESP TIRO  SHIFT ABRIR  M MENU", 15))
-    hud = label(" VIDA    MUN   ".ljust(32), 15)
+    meter_idle = tile([(bits, 0x41) for bits in (0, 0, 0, 0x7e, 0x7e, 0, 0, 0)])
+    meter_active = tile([(bits, 0x71) for bits in (0, 0, 0x7e, 0x7e, 0x7e, 0x7e, 0, 0)])
+    heart_full = tile([(bits, 0x91) for bits in (0, 0x66, 0xff, 0xff, 0x7e, 0x3c, 0x18, 0)])
+    heart_empty = tile([(bits, 0xe1) for bits in (0, 0x66, 0x99, 0x81, 0x42, 0x24, 0x18, 0)])
+    life_label = label(" VIDA ", 15)
+    hud = life_label + [heart_full] * MAX_LIFE + label(" MUN ", 15)
+    ammo_offset = len(hud)
+    hint_offset = ammo_offset + 3
+    hint_width = 32 - hint_offset
+    hud.extend([blank] * (32 - len(hud)))
+    weapons = label("PISTOLAPULSO  ", 7)
     digits = [
         tile([(row << 2, 0xf1) for row in bytes.fromhex(glyph)] + [(0, 0x11)])
         for glyph in (
@@ -345,12 +476,13 @@ def generate():
         )
     ]
     hints = (
-        "ELIMINE O MONSTRO", "ABRA A PORTA", "ACHE A SAIDA", "PORTA TRANCADA",
-        "SEM MUNICAO", "MUNICAO EXTRA",
+        "DERROTE TODOS", "ABRA A PORTA", "ACHE A SAIDA", "PORTA SELADA",
+        "SEM MUNICAO", "MUNICAO EXTRA", "ACHE A CHAVE",
     )
-    hint_tiles = [
-        index for message in hints for index in label(message[:17].ljust(17), 11)
-    ]
+    if any(len(message) > hint_width for message in hints):
+        raise ValueError("Mensagem de objetivo excede a largura disponível no HUD.")
+    hint_labels = [f"hud_hint_{index}" for index in range(len(hints))]
+    hint_rows = [data(name, label(message.ljust(hint_width), 11)) for name, message in zip(hint_labels, hints)]
     if len(tile_ids) > 256:
         raise ValueError("SCREEN 2 admite até 256 tiles por banco.")
 
@@ -360,15 +492,13 @@ def generate():
         forward_x, forward_y = sin(angle), -cos(angle)
         walk_vectors.extend((round(40 * forward_x), round(40 * forward_y)))
         camera_vectors.extend((round(64 * forward_x) & 255, round(-64 * forward_y) & 255))
-        for column in range(32):
+        for column in range(32 if heading < 16 else 0):
             camera_x = ((column + 0.5) / 16 - 1) * 0.65
             ray_vectors.extend((
                 round(36 * (forward_x - forward_y * camera_x)) & 255,
                 round(36 * (forward_y + forward_x * camera_x)) & 255,
             ))
 
-    door_y, door_x = next((y, row.index("D")) for y, row in enumerate(WORLD) if "D" in row)
-    exit_y, exit_x = next((y, row.index("E")) for y, row in enumerate(WORLD) if "E" in row)
     return "\n".join((
         data("tile_patterns", patterns),
         "tile_patterns_end:",
@@ -381,7 +511,6 @@ def generate():
         data("heights", (wall_heights.index(height) for height in heights)),
         data("wall_columns", templates),
         "    ds align 256",
-        data("world_map", (terrain_chars.index(cell.replace("E", ".")) for row in WORLD for cell in row)),
         data("terrain_tiles", terrain_tiles),
         # Index by material plus 4 for a corner. Doors use the same style in both cases.
         data("wall_styles", (i * len(wall_heights) for i in (0, 0, 1, 2, 0, 3, 4, 2))),
@@ -389,29 +518,26 @@ def generate():
         data("object_depths", (distance * 4 // 9 for distance in range(182))),
         data("object_offsets", (0, 1, 5, 14)),
         data("hud_template", hud),
+        f"max_life: equ {MAX_LIFE}",
+        f"hud_life_offset: equ {len(life_label)}",
+        f"hud_ammo_offset: equ {ammo_offset}",
+        f"hud_hint_offset: equ {hint_offset}",
+        f"hud_hint_width: equ {hint_width}",
+        data("hud_hearts", (heart_empty, heart_full)),
+        data("weapon_names", weapons),
         data("hud_digits", digits),
-        data("hud_hints", hint_tiles),
-        data("defeat_line", defeat),
-        data("victory_line", victory),
+        data("hud_hint_addresses", hint_labels, "dw"),
+        *hint_rows,
+        *campaign_panels,
+        data("campaign_panels", ("death_panel", "clear_panel", "last_panel", "title_panel"), "dw"),
         legend_panel,
         map_panel,
         data("menu_hud", menu_hud),
         data("map_arrows", directions),
         f"map_open_door: equ {door_passage}",
         *(f"map_{kind}: equ {icon}" for kind, _, icon in markers if kind != "player"),
-        f"start_x: equ {START[0] * 256 + 128}",
-        f"start_y: equ {START[1] * 256 + 128}",
-        f"spawn_x: equ {MONSTER[0] * 256 + 128}",
-        f"spawn_y: equ {MONSTER[1] * 256 + 128}",
-        f"ammo_x: equ {AMMO[0] * 256 + 32}",
-        f"ammo_y: equ {AMMO[1] * 256 + 128}",
-        f"ammo_index: equ {AMMO[1] * 16 + AMMO[0]}",
-        f"door_index: equ {door_y * 16 + door_x}",
-        f"door_x: equ {door_x * 256 + 128}",
-        f"door_y: equ {door_y * 256 + 128}",
-        f"exit_x: equ {exit_x * 256 + 128}",
-        f"exit_y: equ {exit_y * 256 + 128}",
-        f"exit_index: equ {exit_y * 16 + exit_x}",
-        "rom_end:",
+        level_data(),
+        f"intro_meter_idle: equ {meter_idle}",
+        f"intro_meter_active: equ {meter_active}",
         "",
     ))

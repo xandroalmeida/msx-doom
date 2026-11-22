@@ -30,7 +30,8 @@ change_tab:
 ; Terminate the sprite list while the panel occupies the viewport.
 show_game_sprites:
     ld a,(menu_state)
-    or a
+    ld hl,outcome
+    or (hl)
     ld a,92
     jr z,write_first_sprite
     ld a,208
@@ -39,11 +40,7 @@ write_first_sprite:
     jp WRTVRM
 
 render_menu:
-    ld hl,view
-    ld (hl),0                     ; tile zero is blank
-    ld de,view+1
-    ld bc,view_size-1
-    ldir
+    call clear_view
     ld hl,menu_hud
     ld de,hud
     ld bc,32
@@ -54,6 +51,15 @@ render_menu:
     jp z,draw_panel
     call draw_map
     ld hl,map_panel
+    jr draw_panel
+
+clear_view:
+    ld hl,view
+    ld (hl),0                     ; tile zero is blank
+    ld de,view+1
+    ld bc,view_size-1
+    ldir
+    ret
 
 draw_panel:
     ld a,(hl)
@@ -79,7 +85,7 @@ map_row:
     ld c,16
 map_square:
     ld l,(ix+0)
-    ld h,terrain_tiles/256        ; table starts just after the aligned world map
+    ld h,terrain_tiles/256        ; page-aligned terrain lookup
     ld a,(hl)
     ld (de),a
     inc ix
@@ -97,28 +103,45 @@ map_next_row:
     ld a,(door_open)
     or a
     jr z,map_exit_marker
-    ld a,door_index
+    ld a,(door_index)
     ld c,map_open_door
     call plot_map
 map_exit_marker:
-    ld a,exit_index
+    ld hl,exit_point+1
+    ld a,(exit_point+3)
     ld c,map_exit
-    call plot_map
+    call plot_position
     ld a,(supplies)
     or a
-    jr z,map_enemy_marker
-    ld a,ammo_index
+    jr z,map_key_marker
+    ld hl,ammo_point+1
+    ld a,(ammo_point+3)
     ld c,map_ammo
-    call plot_map
+    call plot_position
+map_key_marker:
+    ld a,(key_waiting)
+    or a
+    jr z,map_enemy_marker
+    ld hl,key_point+1
+    ld a,(key_point+3)
+    ld c,map_key
+    call plot_position
 map_enemy_marker:
     ld a,(enemy_hp)
     or a
-    jr z,map_player_marker
+    jr z,map_brute_marker
     ld c,map_creature
     ld hl,enemy_x+1
     ld a,(enemy_y+1)
-    call map_coordinates
-    call plot_map
+    call plot_position
+map_brute_marker:
+    ld a,(enemy_brute+actor_hp)
+    or a
+    jr z,map_player_marker
+    ld c,map_brute
+    ld hl,enemy_brute+actor_x+1
+    ld a,(enemy_brute+actor_y+1)
+    call plot_position
 map_player_marker:
     ld a,(heading)
     add a,8
@@ -134,6 +157,7 @@ map_player_marker:
     ld c,(hl)
     ld hl,player_x+1
     ld a,(player_y+1)
+plot_position:
     call map_coordinates
 
 ; A is the packed cell index and C is the tile. Player is drawn last.

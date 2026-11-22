@@ -6,6 +6,7 @@ import struct
 import subprocess
 import sys
 
+from opening import score_data
 from tables import generate
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,9 +21,9 @@ def main():
     output = ROOT / "build"
     output.mkdir(exist_ok=True)
     source = output / "posto-umbra.generated.z80"
-    modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80")
+    modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80", "campaign.z80", "opening.z80")
     assembly = "\n".join((ROOT / "src" / module).read_text() for module in modules)
-    source.write_text(assembly + "\n" + generate())
+    source.write_text(assembly + "\n" + generate() + score_data() + "\nrom_end:\n")
     binary = output / "posto-umbra.bin"
     assembler = [args.assembler]
     if args.assembler.endswith(".py"):

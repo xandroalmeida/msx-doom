@@ -1,0 +1,325 @@
+; The title owns all three PSG channels. It updates once per hardware tick.
+IDBYT1:     equ &002b
+intro_last: equ &c22c
+intro_rate: equ &c22d
+intro_phase: equ &c22e
+intro_gate: equ &c22f
+intro_order_position: equ &c230
+intro_score_position: equ &c232
+intro_left: equ &c234
+intro_io:   equ &c235
+intro_vol_a: equ &c236
+intro_vol_b: equ &c237
+intro_vol_c: equ &c238
+intro_drum:  equ &c239
+intro_meter: equ &c2e8             ; 24 bytes, above the game object queue
+
+intro_start:
+    ld hl,chrome                   ; the first chrome row is blank
+    ld de,chrome
+    call intro_chrome
+    ld a,(IDBYT1)
+    add a,a                       ; bit 7 marks the 50 Hz BIOS
+    ld a,5
+    adc a,0                       ; 5/300 s at 60 Hz, 6/300 s at 50 Hz
+    ld (intro_rate),a
+    ld a,(JIFFY)
+    ld (intro_last),a
+    ld a,7
+    call RDPSG
+    and &c0
+    ld (intro_io),a               ; preserve the PSG's joystick I/O direction
+    xor a
+    ld (intro_phase),a
+    ld (intro_left),a
+    ld hl,intro_order
+    ld (intro_order_position),hl
+    jp intro_play_step
+
+intro_stop:
+    ld e,0
+    ld a,8
+    call intro_psg
+    ld a,9
+    call intro_psg
+    ld a,10
+    call intro_psg
+    ld a,&3f
+    call intro_mixer
+    ld hl,chrome+32
+    ld de,chrome+23*32
+    call intro_chrome
+    call show_sector_number
+    jp show_weapon_name
+
+; Update the header and footer of both name tables only on title transitions.
+intro_chrome:
+    push de
+    ld de,&1820
+    call intro_chrome_row
+    pop hl
+    ld de,&1ae0
+intro_chrome_row:
+    push de
+    push hl
+    ld bc,32
+    call LDIRVM
+    pop hl
+    pop de
+    ld a,d
+    add a,4
+    ld d,a
+    ld bc,32
+    jp LDIRVM
+
+intro_tick:
+    ld a,(outcome)
+    cp 4
+    ret nz
+    ld a,(JIFFY)
+    ld c,a
+    ld hl,intro_last
+    sub (hl)
+    ret z
+    ld (hl),c
+    ld b,a
+intro_catch_up:
+    push bc
+    call intro_advance
+    pop bc
+    djnz intro_catch_up
+    ret
+
+intro_advance:
+    ld a,(intro_rate)
+    ld b,a
+    ld a,(intro_phase)
+    add a,b
+    cp 30                         ; a sixteenth note lasts 1/10 second
+    jr c,intro_in_step
+    sub 30
+    ld (intro_phase),a
+    jp intro_play_step
+intro_in_step:
+    ld (intro_phase),a
+    cp 15
+    ret c
+    ld a,(intro_gate)
+    or a
+    ret z
+    xor a
+    ld (intro_gate),a
+    jp intro_release
+
+intro_next_bar:
+    ld hl,(intro_order_position)
+intro_read_order:
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld a,d
+    or e
+    jr nz,intro_pattern_ready
+    ld hl,intro_order
+    jr intro_read_order
+intro_pattern_ready:
+    ld (intro_order_position),hl
+    ld (intro_score_position),de
+    ld a,intro_bar_steps
+    ld (intro_left),a
+    ret
+
+intro_play_step:
+    ld a,(intro_left)
+    or a
+    call z,intro_next_bar
+    ld hl,intro_left
+    dec (hl)
+    ld hl,(intro_score_position)
+    ld a,(hl)
+    ld bc,&0a00                    ; volume 10, tone register 0 (lead)
+    call intro_pitch
+    ld (intro_vol_a),a
+    inc hl
+    ld a,(hl)
+    ld bc,&0802                    ; volume 8, tone register 2 (harmony)
+    call intro_pitch
+    ld (intro_vol_b),a
+    inc hl
+    ld a,(hl)
+    ld bc,&0c04                    ; volume 12, tone register 4 (bass)
+    call intro_pitch
+    ld (intro_vol_c),a
+    inc hl
+    ld a,(hl)
+    ld (intro_drum),a
+    inc hl
+    ld (intro_score_position),hl
+    ld a,1
+    ld (intro_gate),a
+    ld a,(intro_drum)
+    or a
+    jr z,intro_tones_only
+    ld e,a
+    ld a,6
+    call intro_psg
+    ld a,(intro_vol_c)
+    or a
+    ld a,&18                       ; mix percussion noise into channel C
+    jr nz,intro_drum_mix
+    or 4                           ; disable C's tone on a bass rest
+intro_drum_mix:
+    call intro_mixer
+    jr intro_volumes
+intro_tones_only:
+    ld a,&38
+    call intro_mixer
+intro_volumes:
+    ld a,(intro_vol_a)
+    ld e,a
+    ld a,8
+    call intro_psg
+    ld a,(intro_vol_b)
+    ld e,a
+    ld a,9
+    call intro_psg
+    ld a,(intro_drum)
+    or a
+    ld a,12
+    jr nz,intro_write_bass
+    ld a,(intro_vol_c)
+intro_write_bass:
+    ld e,a
+    ld a,10
+    call intro_psg
+    jp draw_intro_meters
+
+intro_release:
+    ld a,&38
+    call intro_mixer
+    ld hl,intro_vol_a
+    ld c,8
+intro_release_voice:
+    ld a,(hl)
+    srl a
+    ld e,a
+    ld a,c
+    call intro_psg
+    inc hl
+    inc c
+    ld a,c
+    cp 11
+    jr nz,intro_release_voice
+    jp draw_intro_meters
+
+; A = note ID, B = volume, C = low tone register. Return the voice's volume.
+intro_pitch:
+    or a
+    ret z
+    push hl
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,intro_periods
+    add hl,de
+    ld e,(hl)
+    ld a,c
+    call intro_psg
+    inc hl
+    ld e,(hl)
+    inc a                          ; paired high tone register
+    call intro_psg
+    pop hl
+    ld a,b
+    ret
+
+intro_mixer:
+    ld e,a
+    ld a,(intro_io)
+    or e
+    ld e,a
+    ld a,7
+
+intro_psg:
+    push af
+    push bc
+    push de
+    push hl
+    call WRTPSG
+    pop hl
+    pop de
+    pop bc
+    pop af
+    ret
+
+draw_intro_meters:
+    ld a,(intro_gate)
+    ld h,a
+    ld ix,intro_vol_a
+    ld de,intro_meter
+    ld b,3
+intro_meter_voice:
+    ld a,(ix+0)
+    inc ix
+    push bc
+    ld c,a
+    ld a,b
+    cp 1
+    jr nz,intro_meter_decay
+    ld a,h
+    or a
+    jr z,intro_meter_decay
+    ld a,(intro_drum)
+    or a
+    jr z,intro_meter_decay
+    ld c,12                        ; channel C's noise transient
+intro_meter_decay:
+    srl c
+    ld a,h
+    or a
+    jr nz,intro_meter_segments
+    srl c
+intro_meter_segments:
+    ld b,6
+intro_meter_segment:
+    ld a,c
+    or a
+    ld a,intro_meter_idle
+    jr z,intro_meter_write
+    dec c
+    ld a,intro_meter_active
+intro_meter_write:
+    ld (de),a
+    inc de
+    djnz intro_meter_segment
+    xor a
+    ld (de),a
+    inc de
+    ld (de),a
+    inc de
+    pop bc
+    djnz intro_meter_voice
+    ld a,(menu_state)
+    or a
+    ret nz
+    ld a,(outcome)
+    cp 4
+    ret nz
+    call intro_meter_to_view
+    ld a,(front_page)
+    add a,a
+    add a,a
+    inc a                          ; screen row 13, column 5 (offset 01A5h)
+    ld d,a
+    ld e,&a5
+    ld hl,intro_meter
+    ld bc,24
+    jp LDIRVM
+
+intro_meter_to_view:
+    ld hl,intro_meter
+    ld de,view+9*32+5
+    ld bc,24
+    ldir
+    ret

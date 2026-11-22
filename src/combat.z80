@@ -1,40 +1,9 @@
-; The terrain is shared by movement, rendering, shots and enemy visibility.
-reset_level:
-    ld hl,world_map
-    ld de,live_map
-    ld bc,256
-    ldir
-    ld hl,start_x
-    ld (player_x),hl
-    ld hl,start_y
-    ld (player_y),hl
-    ld hl,spawn_x
-    ld (enemy_x),hl
-    ld hl,spawn_y
-    ld (enemy_y),hl
-    xor a
-    ld (heading),a
-    ld (door_open),a
-    ld (outcome),a
-    ld (hint),a
-    ld (flash),a
-    ld (enemy_wait),a
-    ld e,a
-    ld a,8
-    call WRTPSG
-    ld a,1
-    ld (supplies),a
-    ld (dirty),a
-    ld a,2
-    ld (ammo),a
-    ld (enemy_hp),a
-    ld a,5
-    ld (life),a
-    ret
-
+; Terrain is shared by movement, rendering, shots and enemy visibility.
 game_tick:
     xor a
     ld (dirty),a
+    call update_event_tone
+    xor a
     ld hl,flash
     or (hl)
     jr z,read_buttons
@@ -61,8 +30,17 @@ joy_button_b:
     ld hl,pressed
     set 1,(hl)
     bit 0,(hl)
-    jr z,keyboard_fire
+    jr z,joy_weapon
     set 2,(hl)                    ; both joystick buttons toggle the menu
+    jr keyboard_fire
+joy_weapon:
+    ld a,1
+    call GTSTCK
+    cp 1
+    jr nz,keyboard_fire
+    ld hl,pressed
+    res 1,(hl)
+    set 3,(hl)                    ; B + up changes weapon
 keyboard_fire:
     xor a
     call GTTRIG                    ; Space
@@ -74,16 +52,27 @@ keyboard_use:
     ld a,6
     call SNSMAT                    ; left/right Shift share row 6, bit 0
     bit 0,a
-    jr nz,keyboard_menu
+    jr nz,keyboard_weapon
     ld hl,pressed
     set 1,(hl)
+keyboard_weapon:
+    ld a,5
+    call SNSMAT                    ; X is row 5, bit 5
+    bit 5,a
+    jr nz,keyboard_menu
+    ld hl,pressed
+    set 3,(hl)
 keyboard_menu:
     ld a,4
-    call SNSMAT                    ; M is row 4, bit 2
-    bit 2,a
-    jr nz,current_buttons
+    call SNSMAT                    ; M and R share row 4
     ld hl,pressed
+    bit 2,a
+    jr nz,keyboard_retry
     set 2,(hl)
+keyboard_retry:
+    bit 7,a
+    jr nz,current_buttons
+    set 4,(hl)
 current_buttons:
     ld a,(buttons)
     cpl
@@ -103,12 +92,14 @@ current_buttons:
     ld a,(outcome)
     or a
     jr z,play_tick
-    ld a,(pressed)
-    or a
-    ret z
-    jp reset_level
+    jp campaign_action
 
 play_tick:
+    ld a,(pressed)
+    bit 4,a
+    jp nz,reset_level
+    bit 3,a
+    jp nz,switch_weapon
     call read_controls
     call check_location
     ld a,(outcome)
@@ -120,24 +111,46 @@ play_tick:
     ld a,(pressed)
     bit 0,a
     call nz,fire_shot
+    ld iy,enemy_hp
+    call enemy_tick
+    ld a,(outcome)
+    or a
+    ret nz
+    ld iy,enemy_brute
     jp enemy_tick
 
 ; Walking probes four terrain corners and keeps a live enemy solid.
 player_clear:
     call box_clear
     ret nz
-    ld a,(enemy_hp)
-    or a
-    ret z
+    ld iy,enemy_hp
     ld ix,enemy_x
     ld a,100
-    call near_point
-    jr nz,actor_clear
-    inc a
-    ret
-actor_clear:
+    call test_first_actor
+    jr z,actor_blocks
+    ld a,100
+    call test_second_actor
+    jr z,actor_blocks
     xor a
     ret
+actor_blocks:
+    ld a,1
+    or a
+    ret
+
+test_second_actor:
+    ld iy,enemy_brute
+    ld ix,enemy_brute+actor_x
+test_first_actor:
+    ld b,a
+    ld a,(iy+actor_hp)
+    or a
+    jr nz,actor_live
+    inc a
+    ret
+actor_live:
+    ld a,b
+    jp near_point
 
 check_location:
     ld hl,(player_x)
@@ -146,23 +159,45 @@ check_location:
     ld a,112
     call near_point
     jr nz,check_supply
-    ld a,2
-    ld (outcome),a
-    jp mark_dirty
+    jp stage_exit
 check_supply:
     ld a,(supplies)
     or a
-    ret z
+    jr z,check_key
     ld ix,ammo_point
     ld a,112
     call near_point
-    ret nz
+    jr nz,check_key
     xor a
     ld (supplies),a
     ld a,(ammo)
     add a,4
     ld (ammo),a
+    ld e,110
+    call event_tone
     ld a,5
+    call set_hint
+check_key:
+    ld a,(key_waiting)
+    or a
+    ret z
+    ld hl,(player_x)
+    ld de,(player_y)
+    ld ix,key_point
+    ld a,112
+    call near_point
+    ret nz
+    xor a
+    ld (key_waiting),a
+    ld e,82
+    call event_tone
+    ld a,(enemy_hp)
+    ld hl,enemy_brute
+    or (hl)
+    ld a,0
+    jr nz,key_message
+    ld a,1
+key_message:
     jp set_hint
 
 use_door:
@@ -176,33 +211,50 @@ use_door:
     call near_point
     ret nz
     ld a,(enemy_hp)
+    ld hl,enemy_brute
+    or (hl)
+    jr nz,door_locked
+    ld a,(key_waiting)
     or a
     jr z,unlock_door
+    ld a,6
+    jp set_hint
+door_locked:
     ld a,3
     jp set_hint
 unlock_door:
+    ld a,(door_index)
+    ld l,a
+    ld h,live_map/256
     xor a
-    ld (live_map+door_index),a
+    ld (hl),a
     inc a
     ld (door_open),a
+    ld e,155
+    call event_tone
     ld a,2
     jp set_hint
 
 fire_shot:
+    ld a,(weapon)
+    inc a                           ; one charge for pistol, two for pulse
+    ld c,a
     ld hl,ammo
     ld a,(hl)
-    or a
-    jr nz,consume_round
+    cp c
+    jr nc,consume_round
     ld a,4
     jp set_hint
 consume_round:
-    dec (hl)
+    sub c
+    ld (hl),a
     ld a,2
     ld (flash),a
     call play_shot_sound
     call mark_dirty
     ld a,(enemy_hp)
-    or a
+    ld hl,enemy_brute
+    or (hl)
     ret z
     call facing_vector
     ld (line_dx),bc
@@ -211,43 +263,67 @@ consume_round:
     ld (line_x),hl
     ld hl,(player_y)
     ld (line_y),hl
-    ld a,48                        ; 7.5 world cells at 40/256 per step
+    ld a,(weapon)
+    or a
+    ld a,82
+    ld c,48
+    jr z,configure_shot
+    ld a,112
+    ld c,22
+configure_shot:
+    ld (shot_width),a
+    ld a,c                         ; steps of 40/256 of a world cell
     ld (line_count),a
 shot_step:
     call advance_line
     ret nz                         ; terrain blocks the shot first
+    ld iy,enemy_hp
     ld ix,enemy_x
-    ld a,82
-    call near_point
+    ld a,(shot_width)
+    call test_first_actor
+    jr z,damage_enemy
+    ld a,(shot_width)
+    call test_second_actor
     jr z,damage_enemy
     ld hl,line_count
     dec (hl)
     jr nz,shot_step
     ret
 damage_enemy:
-    ld hl,enemy_hp
-    dec (hl)
+    dec (iy+actor_hp)
     jr z,enemy_defeated
-    ld a,4
-    ld (enemy_wait),a
+    ld a,(weapon)
+    or a
+    jr z,enemy_stagger
+    dec (iy+actor_hp)
+    jr z,enemy_defeated
+enemy_stagger:
+    ld (iy+actor_wait),4
     ret
 enemy_defeated:
+    ld a,(enemy_hp)
+    ld hl,enemy_brute
+    or (hl)
+    ret nz
+    ld a,(key_waiting)
+    or a
     ld a,1
+    jr z,show_next_objective
+    ld a,6
+show_next_objective:
     jp set_hint
 
 enemy_tick:
-    ld a,(enemy_hp)
+    ld a,(iy+actor_hp)
     or a
     ret z
-    ld hl,enemy_wait
-    ld a,(hl)
+    ld a,(iy+actor_wait)
     or a
     jr z,enemy_ready
-    dec (hl)
+    dec (iy+actor_wait)
     ret
 enemy_ready:
-    ld hl,(enemy_x)
-    ld de,(enemy_y)
+    call actor_position
     ld a,h
     ld bc,(player_x)
     sub b
@@ -261,11 +337,15 @@ enemy_ready:
     call enemy_sees_player
     ret nz
     ld ix,player_x
+    call test_actor_kind
     ld a,128
+    jr z,reach_ready
+    ld a,192
+reach_ready:
     call near_point
     jr nz,chase_player
-    ld a,10
-    ld (enemy_wait),a
+    ld (iy+actor_wait),10
+    call start_damage_feedback
     ld hl,life
     dec (hl)
     jp nz,mark_dirty
@@ -273,27 +353,64 @@ enemy_ready:
     ld (outcome),a
     jp mark_dirty
 chase_player:
+    call test_actor_kind
     ld a,1
-    ld (enemy_wait),a
+    jr z,wait_before_chase
+    xor a
+wait_before_chase:
+    ld (iy+actor_wait),a
     ld bc,(player_x)
     call nudge
     jr z,chase_y
-    call box_clear
+    call actor_step_clear
     jr nz,chase_y
-    ld (enemy_x),hl
+    ld (iy+actor_x),l
+    ld (iy+actor_x+1),h
     call mark_dirty
 chase_y:
-    ld hl,(enemy_x)
-    ld de,(enemy_y)
+    call actor_position
     ex de,hl
     ld bc,(player_y)
     call nudge
     ret z
     ex de,hl
+    call actor_step_clear
+    ret nz
+    ld (iy+actor_y),e
+    ld (iy+actor_y+1),d
+    jp mark_dirty
+
+actor_step_clear:
     call box_clear
     ret nz
-    ld (enemy_y),de
-    jp mark_dirty
+    call test_actor_kind
+    ld ix,enemy_x
+    jr nz,test_peer
+    ld ix,enemy_brute+actor_x
+test_peer:
+    ld a,(ix-1)
+    or a
+    ret z
+    ld a,82
+    call near_point
+    jp z,actor_blocks
+    xor a
+    ret
+
+; Z for the standard monster. IY and the position registers survive.
+test_actor_kind:
+    push iy
+    pop bc
+    ld a,c
+    cp enemy_hp & 255
+    ret
+
+actor_position:
+    ld l,(iy+actor_x)
+    ld h,(iy+actor_x+1)
+    ld e,(iy+actor_y)
+    ld d,(iy+actor_y+1)
+    ret
 
 coarse_range:
     bit 7,a
@@ -354,13 +471,15 @@ enemy_sees_player:
     push de
     ld (line_x),hl
     ld (line_y),de
-    ld bc,(enemy_x)
+    ld c,l
+    ld b,h
     ld hl,(player_x)
     or a
     sbc hl,bc
     call divide16
     ld (line_dx),hl
-    ld bc,(enemy_y)
+    ld c,e
+    ld b,d
     ld hl,(player_y)
     or a
     sbc hl,bc
@@ -461,15 +580,14 @@ mark_dirty:
     ret
 
 play_shot_sound:
-    ld a,7
-    call RDPSG
-    and &c0
-    or &37                         ; disable all tones, enable noise on A
-    ld e,a
-    ld a,7
-    call WRTPSG
-    ld a,6
+    call gameplay_mixer
+    ld a,(weapon)
+    or a
     ld e,7
+    jr z,shot_pitch
+    ld e,14
+shot_pitch:
+    ld a,6
     call WRTPSG
     ld a,8
     ld e,12
@@ -484,10 +602,3 @@ show_flash:
     ld a,135
 write_flash:
     jp WRTVRM
-
-ammo_point:
-    dw ammo_x,ammo_y
-exit_point:
-    dw exit_x,exit_y
-door_point:
-    dw door_x,door_y
