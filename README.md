@@ -1,6 +1,6 @@
 # Posto Umbra
 
-FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores de 32 × 44 células, quatro portões por setor, 36 inimigos e duas armas. O cartucho linear ocupa 16 KiB.
+FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores de 32 × 44 células, quatro portões por setor, três dificuldades e duas armas. O cartucho linear ocupa 16 KiB.
 
 ## Fases
 
@@ -22,6 +22,7 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 
 | Ação | Teclado | Joystick da porta 1 |
 | --- | --- | --- |
+| Escolher dificuldade na tela de título | ← / → | Esquerda / direita |
 | Começar, avançar de setor ou confirmar uma nova tentativa | Espaço | Botão A |
 | Avançar ou recuar | ↑ / ↓ | Cima / baixo |
 | Girar | ← / → | Esquerda / direita |
@@ -34,9 +35,19 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Rolar o mapa de pausa | ↑ / ↓ | Cima / baixo |
 | Reiniciar o setor durante a partida | R | — |
 
-A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. As caixas amarelas fornecem oito cargas, e os corações no cenário recuperam até dois pontos de vida. O bruto roxo aguenta mais disparos e se aproxima mais rápido que o monstro vermelho.
+Na tela de título, escolha **Fácil**, **Normal** ou **Difícil** antes de apertar Espaço ou o botão A. A seleção inicial é Normal.
+
+| Dificuldade | Inimigos por setor | Comportamento |
+| --- | --- | --- |
+| Fácil | 8 a 10 | Percebem o jogador de mais perto, perseguem mais devagar e dão mais tempo entre ataques. |
+| Normal | 11 a 13 | Alcance e cadência intermediários. |
+| Difícil | 14 a 16 | Percebem de mais longe, perseguem mais rápido e atacam com intervalos menores. |
+
+A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. As caixas amarelas fornecem oito cargas, e os corações no cenário recuperam até dois pontos de vida. O bruto roxo aguenta mais disparos e alcança o jogador de mais longe no ataque.
 
 Encontre as quatro chaves de cada setor, abra os portões correspondentes e siga até o sinal verde. Você pode passar pelos inimigos ou enfrentá-los para alcançar as chaves e os suprimentos. A vida e a munição inicial são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
+
+Ao começar uma campanha, o jogo sorteia as posições de inimigos, munição, cura e chaves em cada setor. O sorteio usa células livres e mantém cada chave acessível antes do portão correspondente. Ao reiniciar ou tentar de novo, o setor repete o mesmo sorteio.
 
 A visão 3D ocupa 256 × 184 pixels. A última linha concentra os corações, a munição, a arma, o setor e a dica de objetivo em uma fonte pixel art inspirada em terminais. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
 
@@ -70,7 +81,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Os arquivos de captura são opcionais. O WAV vem do PSG emulado. O teste verifica a música a 50 e 60 Hz, percorre a campanha com os controles do jogo e mede o tempo de navegação com os inimigos desativados. Uma arena separada verifica armas, tiros em sequência, oclusão, cura, derrota e os efeitos de dano. O teste do minimapa cobre os dois atalhos, movimento, direção e a ausência de ícones de itens e inimigos. A validação em um MSX1 físico ainda está pendente.
+Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a música a 50 e 60 Hz, as três dificuldades, a variação de posições, o reinício com a mesma distribuição e o acesso às chaves. Ela também percorre a campanha com os controles do jogo e verifica combate, cura, derrota, o HUD e o minimapa. A validação em um MSX1 físico ainda está pendente.
 
 ## Código
 

@@ -1,8 +1,9 @@
 """Generate the original map, camera and SCREEN 2 tiles at build time."""
 
+from itertools import groupby
 from math import cos, pi, sin
 
-from levels import sector_data
+from levels import HEIGHT, sector_data
 
 RAY_LIMIT = 224
 MAX_LIFE = 5
@@ -265,6 +266,20 @@ def sloped_caps(heights, walls, palettes, ceiling, floor, used_tiles):
     )
 
 
+def pack_wall_columns(tiles, height_count):
+    # One RAM page per height. A high-bit token denotes repeated tile names.
+    if height_count > HEIGHT - 2 or max(tiles) >= 128:
+        raise ValueError("As colunas de parede excedem o espaço reservado.")
+    for height in range(height_count):
+        row = (tiles[style * height_count * 16 + height * 16 + y]
+               for style in range(5) for y in range(16))
+        for tile_id, group in groupby(row):
+            length = sum(1 for _ in group)
+            if length > 1:
+                yield 128 + length
+            yield tile_id
+
+
 def generate():
     patterns, colors = bytearray(), bytearray()
     tile_ids = {}
@@ -295,7 +310,7 @@ def generate():
     # Two-pixel height increments bound the number of wall cap profiles.
     heights = [min(64, 2 * round(355 / (2 * n))) for n in range(1, RAY_LIMIT + 2)]
     wall_heights = sorted(set(heights))
-    style_offsets = [i * len(wall_heights) for i in (0, 0, 1, 2, 0, 3, 4, 2)]
+    style_offsets = [32 + i * 16 for i in (0, 0, 1, 2, 0, 3, 4, 2)]
     templates = []
     door = [(0xFE, 0xD4), (0xBA, 0xD4)] + [(0x7E, 0xD4)] * 5 + [(0x7E, 0xF4)]
     stone_palettes = [palette for _, _, palette in TERRAIN if palette is not None]
@@ -418,8 +433,16 @@ def generate():
         story_panel("death_panel", "VOCE CAIU", "O SETOR AINDA ESTA TOMADO", "ESP TENTAR DE NOVO", 9),
         story_panel("clear_panel", "SETOR SEGURO", "A ROTA ESTA LIVRE", "ESP PROXIMO SETOR", 7),
         story_panel("last_panel", "POSTO RECUPERADO", "CAMPANHA CONCLUIDA", "ESP VOLTAR AO INICIO", 7),
-        story_panel("title_panel", "POSTO UMBRA", "SINAL DE UMBRA", "ESP INICIAR CAMPANHA", 7),
+        panel("title_panel", [
+            (3, 10, label("POSTO UMBRA", 7)),
+            (7, 9, label("SINAL DE UMBRA", 15)),
+            (12, 7, [directions[3], blank, *label("NIVEL", 15)]),
+            (12, 24, [directions[1]]),
+            (14, 6, label("ESP INICIAR CAMPANHA", 11)),
+        ]),
     )
+    difficulty_names = [index for name in ("FACIL", "NORMAL", "DIFICIL")
+                        for index in label(name.ljust(8), 15)]
     meter_idle = tile([(bits, 0x41) for bits in (0, 0, 0, 0x7e, 0x7e, 0, 0, 0)])
     meter_active = tile([(bits, 0x71) for bits in (0, 0, 0x7e, 0x7e, 0x7e, 0x7e, 0, 0)])
     heart_empty = tile([(bits, 0xe1) for bits in (0, 0x66, 0x99, 0x81, 0x42, 0x24, 0x18, 0)])
@@ -455,6 +478,7 @@ def generate():
     used_tiles[0].update([ceiling_tile, *mini_terrain])
     used_tiles[1].update((meter_idle, meter_active))
     used_tiles[2].update(menu_hud + map_hud + hud + weapons + digits + [heart_empty])
+    used_tiles[2].update(difficulty_names)
     used_tiles[2].update(index for hint in hint_tiles for index in hint)
     caps = sloped_caps(wall_heights, walls, stone_palettes, ceiling, floor, used_tiles)
 
@@ -481,7 +505,7 @@ def generate():
         data("ray_vectors", ray_vectors),
         data("camera_vectors", camera_vectors),
         "ray_limit: equ " + str(RAY_LIMIT),
-        data("wall_columns", templates),
+        data("wall_columns", pack_wall_columns(templates, len(wall_heights))),
         "    ds align 256",
         data("terrain_tiles", terrain_tiles),
         data("mini_terrain", mini_terrain),
@@ -507,6 +531,7 @@ def generate():
         data("hud_hint_addresses", hint_labels, "dw"),
         *hint_rows,
         *campaign_panels,
+        data("difficulty_names", difficulty_names),
         data("campaign_panels", ("death_panel", "clear_panel", "last_panel", "title_panel"), "dw"),
         legend_panel,
         data("menu_hud", menu_hud),

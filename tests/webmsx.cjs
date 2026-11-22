@@ -38,6 +38,7 @@ const digitTiles = romTiles("hud_digits", 10);
 const [heartEmpty, heartFull] = romTiles("hud_hearts", 2);
 const weaponNames = romTiles("weapon_names", 14);
 const miniTerrain = romTiles("mini_terrain", 4);
+const difficultyNames = romTiles("difficulty_names", 24);
 const frameStart = 0xc080;
 const viewStart = 0xc100;
 const hudStart = 0xc360;
@@ -182,6 +183,7 @@ const state = {
     playerX: 0xf100, playerY: 0xf102, heading: 0xf104, page: 0xf105, shown: 0xf10b, life: 0xf10f,
     ammo: 0xf110, enemyEnd: 0xf111, propEnd: 0xf112, keysHeld: 0xf113, mapTop: 0xf116,
     outcome: 0xf119, hint: 0xf11a, flash: 0xf11b, menu: 0xf125, sector: 0xf126, weapon: 0xf12a, minimap: 0xf127,
+    difficulty: 0xf145, sight: 0xf147, attackDelay: 0xf148, chaseDelay: 0xf149, seed: 0xf14a,
     wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400,
 };
 const up = 0x20;
@@ -222,8 +224,8 @@ function placePlayer(demo, x, y, heading = 0) {
 }
 
 function installEntities(demo, base, end, records) {
-    for (const [i, [x, y, kind, arg]] of records.entries()) {
-        const bytes = [base === state.enemies ? arg : 1, 128, x, 128, y, 0, kind, arg];
+    for (const [i, [x, y, kind, arg, wait = 0]] of records.entries()) {
+        const bytes = [base === state.enemies ? arg : 1, 128, x, 128, y, wait, kind, arg];
         bytes.forEach((value, offset) => demo.write(base + i * 8 + offset, value));
     }
     demo.write(end, (base + records.length * 8) & 255);
@@ -262,10 +264,16 @@ function press(demo, input, value) {
     demo.run(12);
 }
 
-function startCampaign(frequency) {
+function startCampaign(frequency, difficulty = 1, delay = 0) {
     const demo = boot(frequency);
-    demo.run(180);
+    demo.run(180 + delay);
     assert.equal(demo.read(state.outcome), 4, "O cartucho deve iniciar na tela de título.");
+    assert.equal(demo.read(state.difficulty), 1);
+    if (difficulty === 0) press(demo, "keys", 0x10);
+    if (difficulty === 2) press(demo, "stick", 0x08);
+    assert.equal(demo.read(state.difficulty), difficulty);
+    assert.deepEqual(demo.currentView().subarray(12 * 32 + 15, 12 * 32 + 23),
+        difficultyNames.subarray(difficulty * 8, difficulty * 8 + 8));
     checkVideo(demo);
     press(demo, "keys", space);
     assert.equal(demo.read(state.outcome), 0);
@@ -298,12 +306,11 @@ function checkWallEdges(frequency, material, direction) {
     assert.ok(left > 0 && right < 31 && right - left > 1);
     const styles = romTiles("wall_styles", 8);
     const heights = romTiles("heights", romAddress("slope_sizes") - romAddress("heights"));
-    const tiles = romTiles("wall_columns", romAddress("terrain_tiles") - romAddress("wall_columns"));
     const view = demo.currentView();
     for (const [column, depth] of depths.entries()) {
         const edge = column === left || column === right;
         const style = material + (edge ? 4 : 0);
-        const tile = tiles[(styles[style] + heights[depth]) * 16 + 7];
+        const tile = demo.read(mapAddress(styles[style] + 7, heights[depth] + 2));
         assert.equal(view[7 * 32 + column], tile, `Borda indevida ou ausente na coluna ${column}.`);
     }
 }
@@ -539,14 +546,15 @@ function checkWeapon(demo, index) {
     assert.equal(vram[0x1b0a], index === 0 ? 1 : 8);
 }
 
-function checkSector(demo, index) {
+function checkSector(demo, index, difficulty = 1) {
     assert.equal(demo.read(state.sector), index);
     assert.equal(demo.read(state.outcome), 0);
     assert.deepEqual(demo.xy(), sectorStarts[index].map((axis) => axis * 256 + 128));
     assert.equal(demo.read(state.ammo), initialCharges[index]);
     assert.equal(demo.read(state.life), 5);
     assert.equal(demo.read(state.keysHeld), 0);
-    assert.equal(entities(demo, state.enemies, state.enemyEnd).length, enemyCounts[index]);
+    assert.equal(demo.read(state.difficulty), difficulty);
+    assert.equal(entities(demo, state.enemies, state.enemyEnd).length, enemyCounts[index] + 3 * (difficulty - 1));
     const props = entities(demo, state.props, state.propEnd);
     for (const gate of props.filter(({ kind }) => kind === 3)) {
         assert.equal(demo.read(gate.address), 1);
@@ -557,6 +565,79 @@ function checkSector(demo, index) {
     const { regs, vram } = demo.video();
     assert.equal(vram[(regs[2] << 10) + hudRow * 32 + sectorOffset], digitTiles[index + 1]);
     checkVideo(demo);
+}
+
+function checkPlacement(demo) {
+    const enemies = entities(demo, state.enemies, state.enemyEnd);
+    const props = entities(demo, state.props, state.propEnd);
+    const toCell = ({ x, y }) => y * width + x;
+    const terrain = Array.from({ length: width * height }, (_, cell) =>
+        demo.read(mapAddress(cell % width, Math.floor(cell / width))));
+    assert.ok(terrain.every((tile) => tile <= 3), "O sorteio deve limpar todas as reservas do terreno.");
+    const [x, y] = demo.xy().map((coordinate) => coordinate >> 8);
+    const start = toCell({ x, y });
+    const occupied = new Set([start]);
+    for (const entity of [...enemies, ...props]) {
+        const cell = toCell(entity);
+        assert.ok(!occupied.has(cell), "Entidades não devem compartilhar uma célula inicial.");
+        assert.equal(terrain[cell], props.includes(entity) && entity.kind === 3 ? 3 : 0);
+        occupied.add(cell);
+    }
+
+    const keys = props.filter(({ kind }) => kind === 2).sort((a, b) => a.arg - b.arg);
+    const gates = props.filter(({ kind }) => kind === 3).sort((a, b) => a.arg - b.arg);
+    const exit = toCell(props.find(({ kind }) => kind === 4));
+    for (const [index, key] of keys.entries()) {
+        const path = [start];
+        const seen = new Set(path);
+        for (let i = 0; i < path.length; i++) {
+            const current = path[i];
+            for (const next of [current - width, current + 1, current + width, current - 1]) {
+                if (terrain[next] !== 0 || seen.has(next)) continue;
+                seen.add(next);
+                path.push(next);
+            }
+        }
+        assert.ok(seen.has(toCell(key)), "A próxima chave deve estar na área acessível.");
+        for (const later of keys.slice(index + 1)) assert.ok(!seen.has(toCell(later)));
+        assert.ok(!seen.has(exit), "A sequência de portões deve proteger a saída.");
+        terrain[toCell(gates[index])] = 0;
+    }
+    return [enemies, ...[0, 1, 2].map((kind) => props.filter((prop) => prop.kind === kind))]
+        .map((group) => group.map(toCell));
+}
+
+function checkDifficulty(frequency) {
+    const normal = startCampaign(frequency);
+    const positions = checkPlacement(normal);
+    const nextRun = startCampaign(frequency, 1, 29);
+    const nextPositions = checkPlacement(nextRun);
+    for (const [kind, group] of positions.entries()) {
+        assert.notDeepEqual(nextPositions[kind], group, "Uma nova semente deve variar inimigos, munição, cura e chaves.");
+    }
+    const seed = [normal.read(state.seed), normal.read(state.seed + 1)];
+    assert.notDeepEqual([nextRun.read(state.seed), nextRun.read(state.seed + 1)], seed);
+    press(normal, "retry", true);
+    assert.deepEqual([normal.read(state.seed), normal.read(state.seed + 1)], seed);
+    assert.deepEqual(checkPlacement(normal), positions, "Reiniciar deve conservar a distribuição do setor.");
+
+    for (const [difficulty, sight, attack, chase] of [[0, 3, 14, 2], [1, 4, 10, 1], [2, 5, 6, 0]]) {
+        const demo = difficulty === 1 ? normal : startCampaign(frequency, difficulty);
+        checkSector(demo, 0, difficulty);
+        checkPlacement(demo);
+        assert.deepEqual([state.sight, state.attackDelay, state.chaseDelay].map(demo.read), [sight, attack, chase]);
+        emptyRoom(demo);
+        placePlayer(demo, 5, 12);
+        installEntities(demo, state.enemies, state.enemyEnd, [[5, 8, 0, 2]]);
+        demo.run(20);
+        const enemyY = demo.read(state.enemies + 3) + 256 * demo.read(state.enemies + 4);
+        assert.equal(enemyY > 8 * 256 + 128, difficulty === 2, "Difícil deve detectar o jogador de mais longe.");
+        installEntities(demo, state.enemies, state.enemyEnd, [[5, 12, 0, 2]]);
+        demo.write(state.enemies + 3, 48);
+        for (let i = 0; i < 30 && demo.read(state.life) === 5; i++) demo.run(1);
+        assert.equal(demo.read(state.life), 4);
+        assert.equal(demo.read(state.enemies + 5), attack, "A dificuldade deve mudar o intervalo entre ataques.");
+    }
 }
 
 function checkMenu(demo, frequency) {
@@ -700,7 +781,7 @@ function checkArena(frequency) {
     assert.equal(demo.read(hudStart + ammoOffset + 1), digitTiles[0]);
     checkHealthHud(demo, 4);
 
-    const two = openArena(frequency, [[4, 9, 0, 2], [6, 9, 1, 4]]);
+    const two = openArena(frequency, [[4, 9, 0, 2, 255], [6, 9, 1, 4, 255]]);
     const view = two.currentView();
     assert.ok(view.some((tile) => creatureTiles.has(tile)) && view.some((tile) => bruteTiles.has(tile)),
         "As duas espécies devem aparecer juntas.");
@@ -836,10 +917,12 @@ function walkRoute(demo, target, gate = false) {
 }
 
 function playCampaign(frequency) {
-    const demo = startCampaign(frequency);
+    const difficulty = frequency === 50 ? 2 : 1;
+    const demo = startCampaign(frequency, difficulty);
     checkMenu(demo, frequency);
     for (let sector = 0; sector < names.length; sector++) {
-        checkSector(demo, sector);
+        checkSector(demo, sector, difficulty);
+        checkPlacement(demo);
         const props = entities(demo, state.props, state.propEnd);
         const keys = props.filter(({ kind }) => kind === 2).sort((a, b) => a.arg - b.arg);
         const gates = props.filter(({ kind }) => kind === 3).sort((a, b) => a.arg - b.arg);
@@ -874,11 +957,12 @@ function playCampaign(frequency) {
     }
     assert.equal(demo.read(state.outcome), 4);
     press(demo, "keys", space);
-    checkSector(demo, 0);
+    checkSector(demo, 0, difficulty);
 }
 
 for (const frequency of [60, 50]) {
     checkOpening(frequency);
+    checkDifficulty(frequency);
     checkWallEdges(frequency, 1, 0);
     checkWallEdges(frequency, 2, 16);
     checkSlopedWall(frequency, frequency === 60 ? 1 : 2);

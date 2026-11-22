@@ -94,6 +94,9 @@ current_buttons:
     ld a,b
     ld (buttons),a
 
+    ld a,(outcome)
+    cp 4
+    jp z,title_tick
     ld a,(pressed)
     bit 2,a
     jp nz,toggle_menu
@@ -406,7 +409,8 @@ enemy_ready:
 reach_ready:
     call near_point
     jr nz,chase_player
-    ld (iy+actor_wait),10
+    ld a,(enemy_attack_delay)
+    ld (iy+actor_wait),a
     ld a,(damage_phase)
     or a
     ret nz                        ; simultaneous melee attacks share the impact window
@@ -419,9 +423,11 @@ reach_ready:
     jp mark_dirty
 chase_player:
     call test_actor_kind
-    ld a,1
+    ld a,(enemy_chase_delay)
     jr z,wait_before_chase
-    xor a
+    or a
+    jr z,wait_before_chase
+    dec a
 wait_before_chase:
     ld (iy+actor_wait),a
     ld bc,(player_x)
@@ -478,7 +484,11 @@ coarse_range:
     jr z,range_positive
     neg
 range_positive:
-    cp 4
+    ld b,a
+    ld a,(enemy_sight)
+    ld c,a
+    ld a,b
+    cp c
     ret
 
 ; Move HL at most 28 units toward BC, leaving DE intact. Z if already there.

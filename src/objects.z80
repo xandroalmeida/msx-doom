@@ -17,7 +17,7 @@ obj_left:    equ &f18f
 queue_end:   equ &f196
 best_record: equ &f198
 best_depth:  equ &f19a
-object_queue: equ &f000           ; up to 31 records of seven bytes each
+object_queue: equ &f000           ; up to 29 visible records of seven bytes each
 
 render_scene:
     ld a,(menu_state)

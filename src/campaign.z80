@@ -52,8 +52,16 @@ load_sector:
     inc hl
     ld de,enemies
     call load_entities
+    push hl
+    ld a,(difficulty)
+    ld c,a
+    ld b,0
+    ld hl,enemy_skip
+    add hl,bc
     ld a,e
+    sub (hl)
     ld (enemy_end),a
+    pop hl
     ld b,(hl)
     inc hl
     ld de,props
@@ -85,7 +93,10 @@ unpack_next:
     ld a,d
     cp live_map/256+map_height
     jr nz,unpack_run
-    ret
+    jp randomize_sector
+
+enemy_skip:
+    db 6*entity_size,3*entity_size,0
 
 ; ROM records hold X, Y, kind and amount. Enemy health starts at the amount.
 load_entities:
@@ -121,6 +132,126 @@ load_entity_position:
     ldi                           ; amount / key bit mask
     pop bc
     djnz load_entities
+    ret
+
+; Reserve all starting cells, move actors and pickups along free floor, then
+; clear the reservations. Solid doors keep each key in its original zone.
+randomize_sector:
+    ld hl,(level_seed)
+    ld (rng_state),hl
+    ld a,(player_y+1)
+    add a,live_map/256
+    ld h,a
+    ld a,(player_x+1)
+    ld l,a
+    push hl
+    ld (hl),&80
+    ld a,&80
+    call place_entities
+    ld a,1
+    call place_entities
+    xor a
+    call place_entities
+    pop hl
+    ld (hl),0
+    ret
+
+place_entities:
+    ld (placement_pass),a
+    ld iy,enemies
+place_enemies:
+    call place_entity
+    call next_enemy
+    jr nz,place_enemies
+    ld iy,props
+place_props:
+    ld a,(iy+actor_kind)
+    cp prop_door
+    jr z,place_prop_next
+    cp prop_exit
+    jr nz,place_prop
+    ld a,(placement_pass)
+    cp 1
+    jr z,place_prop_next
+place_prop:
+    call place_entity
+place_prop_next:
+    call next_prop
+    jr nz,place_props
+    ret
+
+place_entity:
+    ld l,(iy+actor_x+1)
+    ld a,(iy+actor_y+1)
+    add a,live_map/256
+    ld h,a
+    ld a,(placement_pass)
+    cp 1
+    jr z,move_entity
+    ld (hl),a
+    ret
+move_entity:
+    ld (hl),0
+    ld b,12                       ; bounded attempts, longer walks for supplies and enemies
+    ld c,3
+    ld a,(iy+actor_kind)
+    cp prop_key
+    jr z,try_placement
+    ld c,6
+try_placement:
+    push hl
+    call placement_random
+    pop hl
+    push hl
+    and 3
+    jr z,placement_left
+    dec a
+    jr z,placement_right
+    dec a
+    jr z,placement_up
+    inc h
+    jr placement_cell
+placement_left:
+    dec l
+    jr placement_cell
+placement_right:
+    inc l
+    jr placement_cell
+placement_up:
+    dec h
+placement_cell:
+    ld a,(hl)
+    or a
+    jr z,accept_step
+    pop hl
+    jr next_placement
+accept_step:
+    pop de
+    dec c
+    jr z,save_placement
+next_placement:
+    djnz try_placement
+save_placement:
+    ld (hl),&80
+    ld (iy+actor_x+1),l
+    ld a,h
+    sub live_map/256
+    ld (iy+actor_y+1),a
+    ret
+
+; 16-bit Galois LFSR. A nonzero seed is set when the player starts the campaign.
+placement_random:
+    ld hl,(rng_state)
+    srl h
+    rr l
+    jr nc,save_random
+    ld a,h
+    xor &b4
+    ld h,a
+save_random:
+    ld (rng_state),hl
+    ld a,l
+    xor h
     ret
 
 next_enemy:
@@ -163,29 +294,79 @@ campaign_action:
     bit 0,a
     ret z
     ld a,(outcome)
-    cp 4
-    jr z,leave_title
     cp 3
     jr z,campaign_restart
     cp 2
     jr nz,load_next
     ld hl,sector
     inc (hl)
+    ld hl,(rng_state)
+    ld (level_seed),hl
 load_next:
     jp reset_level
 campaign_restart:
     xor a
     ld (sector),a
+    ld (title_direction),a
     call reset_level
     call intro_start
     ld a,4
-    jr set_outcome
-leave_title:
-    call intro_stop
-    xor a
-set_outcome:
     ld (outcome),a
     jp mark_dirty
+
+title_tick:
+    ld a,(pressed)
+    bit 0,a
+    jr nz,begin_campaign
+    call read_direction
+    ld hl,title_direction
+    cp (hl)
+    ret z
+    ld (hl),a
+    ld hl,difficulty
+    cp 3
+    jr z,raise_difficulty
+    cp 7
+    ret nz
+    ld a,(hl)
+    or a
+    ret z
+    dec (hl)
+    jp mark_dirty
+raise_difficulty:
+    ld a,(hl)
+    cp 2
+    ret nc
+    inc (hl)
+    jp mark_dirty
+
+begin_campaign:
+    call intro_stop
+    ld hl,(JIFFY)
+    ld a,r
+    xor l
+    ld l,a
+    or h
+    jr nz,campaign_seed
+    inc l
+campaign_seed:
+    ld (level_seed),hl
+    call configure_difficulty
+    jp reset_level
+
+configure_difficulty:
+    ld a,(difficulty)
+    ld b,a
+    add a,3
+    ld (enemy_sight),a
+    ld a,2
+    sub b
+    ld (enemy_chase_delay),a
+    add a,a
+    add a,a
+    add a,6
+    ld (enemy_attack_delay),a
+    ret
 
 stage_exit:
     ld a,(sector)
@@ -215,11 +396,25 @@ render_campaign_panel:
     call draw_panel
     ld a,(outcome)
     cp 4
-    call z,intro_meter_to_view
-    ld a,(outcome)
+    jr z,render_title_choices
     cp 1
     ret nz
     jp render_health
+
+render_title_choices:
+    call intro_meter_to_view
+    ld a,(difficulty)
+    add a,a
+    add a,a
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,difficulty_names
+    add hl,de
+    ld de,view+12*32+15
+    ld bc,8
+    ldir
+    ret
 
 ; Channel B mixes a short tone with the weapon noise on channel A.
 event_tone:

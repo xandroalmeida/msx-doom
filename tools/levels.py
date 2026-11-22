@@ -6,7 +6,8 @@ from itertools import groupby
 WIDTH, HEIGHT = 32, 44
 DOORS = "1234"
 KEYS = "abcd"
-MARKS = "PMBAHE" + DOORS + KEYS
+# M/B are always present, m is added on Normal, and t only on Difícil.
+MARKS = "PMBmtAHE" + DOORS + KEYS
 
 
 def layout(rooms, corridors, cover, markers):
@@ -63,7 +64,8 @@ DEPOT = layout(
         "P": ((4, 40),), "E": ((4, 2),),
         "1": ((4, 33),), "2": ((6, 22),), "3": ((3, 11),), "4": ((3, 3),),
         "a": ((28, 39),), "b": ((28, 30),), "c": ((28, 14),), "d": ((28, 3),),
-        "M": ((14, 40), (24, 37), (7, 26), (18, 25), (12, 20), (26, 17), (22, 3)),
+        "M": ((14, 40), (7, 26), (12, 20), (22, 3)),
+        "m": ((24, 37), (18, 25), (26, 17)), "t": ((16, 41), (27, 30), (15, 8)),
         "B": ((27, 41), (26, 26), (27, 15), (26, 6)),
         "A": ((7, 41), (22, 39), (9, 26), (23, 27), (20, 19)),
         "H": ((28, 36), (17, 31), (17, 5)),
@@ -96,7 +98,8 @@ FOUNDRY = layout(
         "P": ((27, 8),), "E": ((24, 34),),
         "1": ((27, 11),), "2": ((25, 22),), "3": ((28, 33),), "4": ((25, 36),),
         "a": ((4, 4),), "b": ((3, 13),), "c": ((4, 25),), "d": ((4, 39),),
-        "M": ((20, 4), (7, 4), (21, 14), (14, 18), (7, 13), (20, 25), (8, 25), (16, 36)),
+        "M": ((20, 4), (21, 14), (7, 13), (20, 25), (16, 36)),
+        "m": ((7, 4), (14, 18), (8, 25)), "t": ((14, 4), (24, 18), (8, 36)),
         "B": ((4, 8), (3, 19), (5, 30), (6, 40)),
         "A": ((24, 3), (8, 8), (22, 20), (10, 16), (20, 31)),
         "H": ((13, 9), (17, 19), (25, 37)),
@@ -128,8 +131,8 @@ REACTOR = layout(
         "P": ((4, 40),), "E": ((22, 3),),
         "1": ((9, 39),), "2": ((19, 36),), "3": ((24, 10),), "4": ((22, 5),),
         "a": ((7, 3),), "b": ((16, 3),), "c": ((28, 41),), "d": ((28, 3),),
-        "M": ((7, 29), (4, 20), (6, 8), (17, 28), (17, 17), (15, 6),
-              (27, 38), (27, 22)),
+        "M": ((7, 29), (6, 8), (17, 28), (15, 6), (27, 38)),
+        "m": ((4, 20), (17, 17), (27, 22)), "t": ((3, 31), (13, 37), (21, 19)),
         "B": ((7, 4), (14, 3), (27, 28), (23, 12), (27, 7)),
         "A": ((6, 40), (4, 11), (11, 39), (12, 26), (22, 39)),
         "H": ((6, 26), (11, 10), (27, 13)),
@@ -187,7 +190,8 @@ def sector_data(data):
     maps, records = [], []
     for index, (name, initial_ammo, rows) in enumerate(SECTORS):
         validate(name, rows)
-        enemies, props, packed = [], [], []
+        enemy_groups = ([], [], [])
+        props, packed = [], []
         start = None
         world = "".join(rows)
         terrain = {"#": 1, "+": 2, **dict.fromkeys(DOORS, 3)}
@@ -201,8 +205,10 @@ def sector_data(data):
             x, y = cell % WIDTH, cell // WIDTH
             if mark == "P":
                 start = (x, y)
-            elif mark in "MB":
-                enemies.append((x, y, int(mark == "B"), 3 + (index == 2) if mark == "B" else 2))
+            elif mark in "MBmt":
+                group = {"m": 1, "t": 2}.get(mark, 0)
+                brute = mark == "B"
+                enemy_groups[group].append((x, y, int(brute), 3 + (index == 2) if brute else 2))
             elif mark == "A":
                 props.append((x, y, 0, 8))
             elif mark == "H":
@@ -213,7 +219,10 @@ def sector_data(data):
                 props.append((x, y, 3, 1 << DOORS.index(mark)))
             elif mark == "E":
                 props.append((x, y, 4, 0))
-        if not 1 <= len(enemies) <= 14 or not 1 <= len(props) <= 17:
+        if not enemy_groups[0] or any(len(group) != 3 for group in enemy_groups[1:]):
+            raise ValueError(f"Reforços inválidos em {name}.")
+        enemies = [enemy for group in enemy_groups for enemy in group]
+        if len(enemies) > 16 or not 1 <= len(props) <= 17:
             raise ValueError(f"Objetos demais em {name}.")
         if initial_ammo + sum(prop[3] for prop in props if prop[2] == 0) < sum(enemy[3] for enemy in enemies):
             raise ValueError(f"Munição insuficiente em {name}.")

@@ -64,6 +64,14 @@ map_cols:   equ &f140
 map_rows:   equ &f141
 map_dst:    equ &f142
 map_palette: equ &f144
+difficulty: equ &f145            ; 0 easy, 1 normal, 2 hard
+title_direction: equ &f146
+enemy_sight: equ &f147
+enemy_attack_delay: equ &f148
+enemy_chase_delay: equ &f149
+level_seed: equ &f14a             ; retained on retry
+rng_state:  equ &f14c
+placement_pass: equ &f14e
 actor_hp:   equ 0
 actor_x:    equ 1
 actor_y:    equ 3
@@ -83,6 +91,7 @@ wall_style: equ &f1e0             ; overlaps the title meters during gameplay
 live_map:   equ &c400             ; 32 cells per page, one page per row
 enemies:    equ live_map+32       ; unused bytes after the first terrain row
 props:      equ live_map+256+32   ; unused bytes after the second terrain row
+wall_cache: equ live_map+512+32   ; one projected height per terrain row's padding
 frame_size: equ 768
 radius:     equ 32
 near_ray_steps: equ 16
@@ -103,13 +112,19 @@ start:
     ld (normal_backdrop),a
     call DISSCR
     call init_video
+    call cache_wall_columns
     xor a
     ld (buttons),a
     ld (shown),a
     ld (menu_state),a
     ld (sector),a
+    ld (title_direction),a
     inc a
     ld (minimap),a
+    ld (difficulty),a
+    ld hl,1
+    ld (level_seed),hl
+    call configure_difficulty
     call reset_level
     call intro_start
     ld a,4
@@ -169,6 +184,33 @@ copy_frame:
     ld hl,frame
     ld bc,frame_size
     jp LDIRVM
+
+cache_wall_columns:
+    ld hl,wall_columns
+    ld de,wall_cache
+cache_wall_token:
+    ld a,(hl)
+    inc hl
+    ld b,1
+    bit 7,a
+    jr z,cache_wall_run
+    and &7f
+    ld b,a
+    ld a,(hl)
+    inc hl
+cache_wall_run:
+    ld (de),a
+    inc e
+    djnz cache_wall_run
+    ld a,e
+    cp 32+5*16
+    jr nz,cache_wall_token
+    ld e,32
+    inc d
+    ld a,d
+    cp wall_cache/256+wall_height_count
+    jr nz,cache_wall_token
+    ret
 
 init_video:
     ld hl,tile_patterns
@@ -669,15 +711,9 @@ draw_wall:
     ld l,a
     ld a,(hl)
     ld (cap_height),a
-    add a,c
-    ld h,0
-    ld l,a
-    add hl,hl
-    add hl,hl
-    add hl,hl
-    add hl,hl
-    ld de,wall_columns
-    add hl,de
+    add a,wall_cache/256
+    ld h,a
+    ld l,c
     ld a,(column)
     ld e,a
     ld d,view/256
