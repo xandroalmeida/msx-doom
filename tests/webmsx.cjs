@@ -47,6 +47,9 @@ const lifeOffset = 1;
 const ammoOffset = 8;
 const weaponOffset = 11;
 const sectorOffset = 20;
+const titlePicture = romTiles("title_picture", 16 * 32);
+const titleMeterOffset = 14 * 32 + 5;
+const titleDifficultyOffset = 16 * 32 + 15;
 
 // Start the authentic machine and VDP, with a minimal host for the video output.
 const core = new vm.Script(
@@ -54,7 +57,7 @@ const core = new vm.Script(
     { filename: "wmsx.js" },
 );
 
-function boot(frequency) {
+function boot(frequency, subslot) {
     const frame = {};
     const noop = () => {};
     const api = {
@@ -128,7 +131,14 @@ function boot(frequency) {
     assert.equal(ram.bytes.length, 64 * 1024);
     slots.insertSlot(new wmsx.SlotBIOS(new wmsx.ROM(bios.name, bios.content, {})), 0, true, true);
     const rom = new wmsx.ROM("posto-umbra.rom", Array.from(cartridge), { s: 0x4000 });
-    slots.insertSlot(new wmsx.SlotPlainROM(rom), 1, true, true);
+    const cartridgeSlot = new wmsx.SlotPlainROM(rom);
+    if (subslot === undefined) {
+        slots.insertSlot(cartridgeSlot, 1, true, true);
+    } else {
+        const expanded = new wmsx.SlotExpanded();
+        expanded.insertSubSlot(cartridgeSlot, subslot);
+        slots.insertSlot(expanded, 1, true, true);
+    }
     slots.insertSlot(ram, 3, true, true);
     machine.powerOn();
 
@@ -179,11 +189,39 @@ function checkVideo(run) {
     assert.deepEqual(vram.subarray(base, base + frame.length), frame);
 }
 
+function checkTitleArt(demo) {
+    // The CPU may be halfway through uploading tiles on a phase boundary.
+    if ((demo.read(0xf12c) & 7) === 0) demo.run(1);
+    const { regs, vram } = demo.video();
+    const base = regs[2] << 10;
+    assert.deepEqual(vram.subarray(base, base + titlePicture.length), titlePicture);
+    const motionSize = romAddress("title_motion_1") - romAddress("title_motion_0");
+    const phase = demo.read(state.titlePhase);
+    const motion = romTiles(`title_motion_${phase}`, motionSize);
+    for (let bank = 0; bank < 2; bank++) {
+        const patterns = `title_patterns_${bank}`;
+        const colors = `title_colors_${bank}`;
+        const size = romAddress(colors) - romAddress(patterns);
+        const offset = bank * 0x800;
+        const expectedPatterns = Buffer.from(romTiles(patterns, size));
+        const expectedColors = Buffer.from(romTiles(colors, size));
+        for (let i = 0; i < motion.length; i += 18) {
+            if (motion[i + 1] !== bank * 8) continue;
+            const tile = motion[i] * 8;
+            motion.copy(expectedPatterns, tile, i + 2, i + 10);
+            motion.copy(expectedColors, tile, i + 10, i + 18);
+        }
+        assert.deepEqual(vram.subarray(offset, offset + size), expectedPatterns);
+        assert.deepEqual(vram.subarray(0x2000 + offset, 0x2000 + offset + size), expectedColors);
+    }
+}
+
 const state = {
     playerX: 0xf100, playerY: 0xf102, heading: 0xf104, page: 0xf105, shown: 0xf10b, life: 0xf10f,
     ammo: 0xf110, enemyEnd: 0xf111, propEnd: 0xf112, keysHeld: 0xf113, mapTop: 0xf116,
     outcome: 0xf119, hint: 0xf11a, flash: 0xf11b, menu: 0xf125, sector: 0xf126, weapon: 0xf12a, minimap: 0xf127,
     difficulty: 0xf145, sight: 0xf147, attackDelay: 0xf148, chaseDelay: 0xf149, seed: 0xf14a,
+    titlePhase: 0xf150,
     wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400,
 };
 const up = 0x20;
@@ -272,8 +310,10 @@ function startCampaign(frequency, difficulty = 1, delay = 0) {
     if (difficulty === 0) press(demo, "keys", 0x10);
     if (difficulty === 2) press(demo, "stick", 0x08);
     assert.equal(demo.read(state.difficulty), difficulty);
-    assert.deepEqual(demo.currentView().subarray(12 * 32 + 15, 12 * 32 + 23),
-        difficultyNames.subarray(difficulty * 8, difficulty * 8 + 8));
+    const selection = Buffer.from(Array.from({ length: 8 }, (_, i) =>
+        demo.read(viewStart + titleDifficultyOffset + i)));
+    assert.deepEqual(selection, difficultyNames.subarray(difficulty * 8, difficulty * 8 + 8));
+    checkTitleArt(demo);
     checkVideo(demo);
     press(demo, "keys", space);
     assert.equal(demo.read(state.outcome), 0);
@@ -493,7 +533,7 @@ function checkOpening(frequency) {
     assert.equal(demo.read(0xf12d), frequency === 60 ? 5 : 6);
     assert.equal(word(0xf130), order + 2);
     assert.equal(word(0xf132), first + 4);
-    const firstMeter = demo.currentView().subarray(9 * 32 + 5, 9 * 32 + 29);
+    const firstMeter = demo.currentView().subarray(titleMeterOffset, titleMeterOffset + 24);
     let meterChanged = false;
     let notes = 0;
     let previousStep = word(0xf132);
@@ -511,7 +551,7 @@ function checkOpening(frequency) {
         heardAllChannels ||= registers[8] > 0 && registers[9] > 0 && registers[10] > 0;
         if ((registers[7] & 0x20) === 0) noisePeriods.add(registers[6]);
         assert.equal(registers[7] & 0xc0, mixerIO);
-        const meter = demo.currentView().subarray(9 * 32 + 5, 9 * 32 + 29);
+        const meter = demo.currentView().subarray(titleMeterOffset, titleMeterOffset + 24);
         meterChanged ||= !firstMeter.equals(meter);
         if (i === frequency && frequency === 60 && titlePath) saveFrame(demo.frame, titlePath);
     }
@@ -520,13 +560,14 @@ function checkOpening(frequency) {
     assert.equal(word(0xf132), first + 4);
     assert.ok(heardAllChannels && noisePeriods.size > 2 && meterChanged);
     if (recorder) recorder.save(openingPath);
-    assert.ok(demo.video().vram.subarray(0x1820, 0x1840).every((tile) => tile === 0));
+    checkTitleArt(demo);
+    const scorePosition = word(0xf132);
 
     press(demo, "keys", space);
     assert.equal(demo.read(state.outcome), 0);
     assert.deepEqual([...psg().subarray(8, 11)], [0, 0, 0], "A abertura deve silenciar ao jogar.");
     assert.equal(psg()[7] & 0x3f, 0x3f);
-    assert.equal(word(0xf132), first + 4, "O leitor da faixa deve ficar parado durante a partida.");
+    assert.equal(word(0xf132), scorePosition, "O leitor da faixa deve ficar parado durante a partida.");
     checkWeapon(demo, 0);
     checkVideo(demo);
     console.log(`Abertura em ${frequency} Hz: 224 passos em 22,4 s, três canais e ruído ativos, repetição e mute OK.`);
@@ -956,9 +997,24 @@ function playCampaign(frequency) {
         press(demo, "keys", space);
     }
     assert.equal(demo.read(state.outcome), 4);
+    checkTitleArt(demo);
     press(demo, "keys", space);
     checkSector(demo, 0, difficulty);
 }
+
+const expanded = boot(60, 2);
+expanded.run(200);
+assert.equal(expanded.read(state.outcome), 4, "O cartucho deve iniciar também em um subslot.");
+for (let i = 0; i < 8 && (expanded.read(0xf12c) & 7) !== 4; i++) expanded.run(1);
+const phases = new Set();
+for (let i = 0; i < 4; i++) {
+    phases.add(expanded.read(state.titlePhase));
+    checkTitleArt(expanded);
+    expanded.run(8);
+}
+assert.equal(phases.size, 4, "A animação da abertura deve apresentar seus quatro quadros de arte.");
+press(expanded, "keys", space);
+checkSector(expanded, 0);
 
 for (const frequency of [60, 50]) {
     checkOpening(frequency);

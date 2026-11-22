@@ -60,6 +60,44 @@ intro_catch_up:
     call intro_advance
     pop bc
     djnz intro_catch_up
+    jp animate_title
+
+; Updating tile art keeps the illustration's name table and UI independent.
+animate_title:
+    ld a,(intro_last)
+    rrca
+    rrca
+    rrca
+    and 3
+    ld hl,title_phase
+    cp (hl)
+    ret z
+    ld (hl),a
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,title_motion_frames
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ex de,hl
+    ld c,title_motion_tiles
+animate_title_tile:
+    ld a,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    push bc
+    push hl
+    ex de,hl
+    call upload_tile_art
+    pop hl
+    ld de,16
+    add hl,de
+    pop bc
+    dec c
+    jr nz,animate_title_tile
     ret
 
 intro_advance:
@@ -282,16 +320,16 @@ intro_meter_write:
     ld a,(front_page)
     add a,a
     add a,a
-    inc a                          ; screen row 13, column 5 (offset 01A5h)
+    add a,2                        ; screen row 18, column 5 (offset 0245h)
     ld d,a
-    ld e,&a5
+    ld e,&45
     ld hl,intro_meter
     ld bc,24
     jp LDIRVM
 
 intro_meter_to_view:
     ld hl,intro_meter
-    ld de,view+9*32+5
+    ld de,view+14*32+5
     ld bc,24
     ldir
     ret

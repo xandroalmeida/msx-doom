@@ -1,4 +1,4 @@
-"""Assemble and pad the 16 KiB cartridge image."""
+"""Assemble and pad the 32 KiB linear cartridge image."""
 
 import argparse
 from pathlib import Path
@@ -7,10 +7,11 @@ import subprocess
 import sys
 
 from opening import score_data
-from tables import generate
+from tables import FONT, data, generate
+from title_art import title_data
 
 ROOT = Path(__file__).resolve().parents[1]
-ROM_SIZE = 16 * 1024
+ROM_SIZE = 32 * 1024
 
 
 def main():
@@ -23,7 +24,8 @@ def main():
     source = output / "posto-umbra.generated.z80"
     modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80", "campaign.z80", "opening.z80")
     assembly = "\n".join((ROOT / "src" / module).read_text() for module in modules)
-    source.write_text(assembly + "\n" + generate() + score_data() + "\nrom_end:\n")
+    source.write_text(assembly + "\n" + generate() + score_data()
+                      + "\n    ds align 16384\n" + title_data(data, FONT) + "\nrom_end:\n")
     binary = output / "posto-umbra.bin"
     assembler = [args.assembler]
     if args.assembler.endswith(".py"):
@@ -44,10 +46,10 @@ def main():
 
     code = binary.read_bytes()
     entry = struct.unpack_from("<H", code, 2)[0]
-    if code[:2] != b"AB" or not 0x4010 <= entry < 0x4000 + len(code):
+    if code[:2] != b"AB" or not 0x4010 <= entry < 0x8000:
         raise ValueError("Cabeçalho de cartucho MSX inválido.")
     if len(code) > ROM_SIZE:
-        raise ValueError(f"O binário de {len(code)} bytes excede o cartucho de 16 KiB.")
+        raise ValueError(f"O binário de {len(code)} bytes excede o cartucho de 32 KiB.")
     rom = output / "posto-umbra.rom"
     rom.write_bytes(code.ljust(ROM_SIZE, b"\xff"))
     print(f"{rom.relative_to(ROOT)}: {len(code)} / {ROM_SIZE} bytes usados")

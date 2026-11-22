@@ -1,4 +1,4 @@
-; MSX1 cartridge mapped at 4000h. Page 3 holds the working state.
+; MSX1 linear cartridge in pages 1 and 2. Page 3 holds the working state.
 CHGMOD:    equ &005f
 DISSCR:    equ &0041
 ENASCR:    equ &0044
@@ -9,8 +9,11 @@ WRTPSG:    equ &0093
 RDPSG:     equ &0096
 GTSTCK:    equ &00d5
 GTTRIG:    equ &00d8
+RSLREG:    equ &0138
 SNSMAT:    equ &0141
+PPI_SLOT:  equ &a8
 JIFFY:     equ &fc9e
+EXPTBL:    equ &fcc1
 BAKCLR:    equ &f3ea
 BDRCLR:    equ &f3eb
 RG7SAV:    equ &f3e6
@@ -72,6 +75,8 @@ enemy_chase_delay: equ &f149
 level_seed: equ &f14a             ; retained on retry
 rng_state:  equ &f14c
 placement_pass: equ &f14e
+display_pending: equ &f14f
+title_phase: equ &f150
 actor_hp:   equ 0
 actor_x:    equ 1
 actor_y:    equ 3
@@ -103,6 +108,7 @@ far_ray_steps: equ (ray_limit-near_ray_steps)/2
     dw start,0,0,0,0,0,0
 
 start:
+    call map_cartridge_page2
     ld a,1
     ld (BAKCLR),a
     ld (BDRCLR),a
@@ -119,6 +125,7 @@ start:
     ld (menu_state),a
     ld (sector),a
     ld (title_direction),a
+    ld (display_pending),a
     inc a
     ld (minimap),a
     ld (difficulty),a
@@ -176,6 +183,13 @@ tick_check:
     call WRTVDP
     call show_game_sprites
     call show_flash
+    ld hl,display_pending
+    ld a,(hl)
+    or a
+    jr z,page_shown
+    ld (hl),0
+    call ENASCR
+page_shown:
     ld hl,shown
     inc (hl)
     jr tick_check
@@ -184,6 +198,63 @@ copy_frame:
     ld hl,frame
     ld bc,frame_size
     jp LDIRVM
+
+; Select the same primary/subslot for page 2 as the BIOS selected for page 1.
+map_cartridge_page2:
+    call RSLREG
+    ld e,a
+    rrca
+    rrca
+    and 3
+    ld c,a
+    ld b,0
+    ld hl,EXPTBL
+    add hl,bc
+    bit 7,(hl)
+    jr z,map_page2
+    ; During a BIOS inter-slot call the live subslot can differ from SLTTBL.
+    ; Read and update it with page 3 temporarily switched and the stack idle.
+    di
+    ld a,e
+    and &3f
+    ld d,a
+    ld a,c
+    rrca
+    rrca
+    or d
+    out (PPI_SLOT),a
+    ld a,(&ffff)
+    cpl
+    ld d,a
+    and &0c
+    add a,a
+    add a,a
+    ld b,a
+    ld a,d
+    and &cf
+    or b
+    ld (&ffff),a
+    ld d,a
+    ld a,e
+    out (PPI_SLOT),a
+    inc hl                         ; SLTTBL follows the four expansion flags
+    inc hl
+    inc hl
+    inc hl
+    ld (hl),d
+map_page2:
+    ld a,c
+    rlca
+    rlca
+    rlca
+    rlca
+    ld c,a
+    ld a,e
+    and &cf
+    or c
+    out (PPI_SLOT),a
+    ei
+    ret
 
 cache_wall_columns:
     ld hl,wall_columns
@@ -214,24 +285,12 @@ cache_wall_run:
 
 init_video:
     ld hl,tile_patterns
-    ld de,&0000
-    call upload_tile_bank
-    ld hl,tile_patterns
-    ld de,&0800
-    call upload_tile_bank
-    ld hl,tile_patterns
     ld de,&1000
-    call upload_tile_bank
-    ld hl,tile_colors
-    ld de,&2000
-    call upload_tile_bank
-    ld hl,tile_colors
-    ld de,&2800
     call upload_tile_bank
     ld hl,tile_colors
     ld de,&3000
     call upload_tile_bank
-    call upload_slopes
+    call load_title_video
     ld hl,sprite_patterns
     ld de,&3800
     ld bc,sprite_patterns_end-sprite_patterns
@@ -240,6 +299,48 @@ init_video:
     ld de,&1b00
     ld bc,sprites_end-sprites
     jp LDIRVM
+
+; The title owns the first two tile banks. Text and meters share the third.
+load_title_video:
+    xor a
+    ld (title_phase),a
+    ld hl,title_patterns_0
+    ld de,&0000
+    ld bc,title_bank_0_size
+    call LDIRVM
+    ld hl,title_colors_0
+    ld de,&2000
+    ld bc,title_bank_0_size
+    call LDIRVM
+    ld hl,title_patterns_1
+    ld de,&0800
+    ld bc,title_bank_1_size
+    call LDIRVM
+    ld hl,title_colors_1
+    ld de,&2800
+    ld bc,title_bank_1_size
+    jp LDIRVM
+
+load_game_video:
+    ld hl,tile_patterns
+    ld de,&0000
+    call upload_tile_bank
+    ld hl,tile_patterns
+    ld de,&0800
+    call upload_tile_bank
+    ld hl,tile_colors
+    ld de,&2000
+    call upload_tile_bank
+    ld hl,tile_colors
+    ld de,&2800
+    call upload_tile_bank
+    jp upload_slopes
+
+blank_for_scene_change:
+    call DISSCR
+    ld a,1
+    ld (display_pending),a
+    ret
 
 upload_tile_bank:
     ld bc,tile_patterns_end-tile_patterns
@@ -259,7 +360,7 @@ upload_slope:
     push de
     push bc
     ld b,&08
-    call upload_slope_tile
+    call upload_tile_art
     pop bc
     pop de
     ld a,b                        ; even countdown: upper cap, odd: lower cap
@@ -271,7 +372,7 @@ upload_slope:
     ld b,a
     ld a,c
     push de
-    call upload_slope_tile
+    call upload_tile_art
     pop hl
     ld de,16
     add hl,de
@@ -282,7 +383,7 @@ upload_slope:
     ret
 
 ; A: slot, B: high byte of bank base, DE: ROM art (eight pattern and eight color bytes).
-upload_slope_tile:
+upload_tile_art:
     ld l,a
     ld h,0
     add hl,hl

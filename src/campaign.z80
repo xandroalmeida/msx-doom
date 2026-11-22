@@ -309,6 +309,8 @@ campaign_restart:
     ld (sector),a
     ld (title_direction),a
     call reset_level
+    call blank_for_scene_change
+    call load_title_video
     call intro_start
     ld a,4
     ld (outcome),a
@@ -352,6 +354,8 @@ begin_campaign:
 campaign_seed:
     ld (level_seed),hl
     call configure_difficulty
+    call blank_for_scene_change
+    call load_game_video
     jp reset_level
 
 configure_difficulty:
@@ -383,6 +387,8 @@ exit_found:
 render_campaign_panel:
     call clear_view
     ld a,(outcome)
+    cp 4
+    jr z,render_title
     dec a
     add a,a
     ld e,a
@@ -395,13 +401,17 @@ render_campaign_panel:
     ld l,a
     call draw_panel
     ld a,(outcome)
-    cp 4
-    jr z,render_title_choices
     cp 1
     ret nz
     jp render_health
 
-render_title_choices:
+render_title:
+    ld hl,title_picture
+    ld de,frame
+    ld bc,16*32
+    ldir
+    ld hl,title_panel
+    call draw_panel
     call intro_meter_to_view
     ld a,(difficulty)
     add a,a
@@ -411,7 +421,7 @@ render_title_choices:
     ld d,0
     ld hl,difficulty_names
     add hl,de
-    ld de,view+12*32+15
+    ld de,view+16*32+15
     ld bc,8
     ldir
     ret

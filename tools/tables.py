@@ -203,7 +203,7 @@ def panel_data(field, rows):
     """Encode sparse rows of text as destination offset, length and tile IDs."""
     blocks = []
     for row, column, tiles in rows:
-        if not (0 <= row < 16 and 0 <= column <= 32 - len(tiles) and tiles):
+        if not (0 <= row < 20 and 0 <= column <= 32 - len(tiles) and tiles):
             raise ValueError("Elemento do menu fora da tela.")
         offset = row * 32 + column
         blocks.extend((len(tiles), offset & 255, offset >> 8, *tiles))
@@ -433,14 +433,13 @@ def generate():
         story_panel("death_panel", "VOCE CAIU", "O SETOR AINDA ESTA TOMADO", "ESP TENTAR DE NOVO", 9),
         story_panel("clear_panel", "SETOR SEGURO", "A ROTA ESTA LIVRE", "ESP PROXIMO SETOR", 7),
         story_panel("last_panel", "POSTO RECUPERADO", "CAMPANHA CONCLUIDA", "ESP VOLTAR AO INICIO", 7),
-        panel("title_panel", [
-            (3, 10, label("POSTO UMBRA", 7)),
-            (7, 9, label("SINAL DE UMBRA", 15)),
-            (12, 7, [directions[3], blank, *label("NIVEL", 15)]),
-            (12, 24, [directions[1]]),
-            (14, 6, label("ESP INICIAR CAMPANHA", 11)),
-        ]),
     )
+    title_panel = panel("title_panel", [
+        (12, 9, label("SINAL DE UMBRA", 15)),
+        (16, 7, [directions[3], blank, *label("NIVEL", 15)]),
+        (16, 24, [directions[1]]),
+        (18, 6, label("ESP INICIAR CAMPANHA", 11)),
+    ])
     difficulty_names = [index for name in ("FACIL", "NORMAL", "DIFICIL")
                         for index in label(name.ljust(8), 15)]
     meter_idle = tile([(bits, 0x41) for bits in (0, 0, 0, 0x7e, 0x7e, 0, 0, 0)])
@@ -476,8 +475,7 @@ def generate():
     for bank in used_tiles:
         bank.update(common_tiles)
     used_tiles[0].update([ceiling_tile, *mini_terrain])
-    used_tiles[1].update((meter_idle, meter_active))
-    used_tiles[2].update(menu_hud + map_hud + hud + weapons + digits + [heart_empty])
+    used_tiles[2].update(menu_hud + map_hud + hud + weapons + digits + [heart_empty, meter_idle, meter_active])
     used_tiles[2].update(difficulty_names)
     used_tiles[2].update(index for hint in hint_tiles for index in hint)
     caps = sloped_caps(wall_heights, walls, stone_palettes, ceiling, floor, used_tiles)
@@ -531,8 +529,9 @@ def generate():
         data("hud_hint_addresses", hint_labels, "dw"),
         *hint_rows,
         *campaign_panels,
+        title_panel,
         data("difficulty_names", difficulty_names),
-        data("campaign_panels", ("death_panel", "clear_panel", "last_panel", "title_panel"), "dw"),
+        data("campaign_panels", ("death_panel", "clear_panel", "last_panel"), "dw"),
         legend_panel,
         data("menu_hud", menu_hud),
         data("map_hud", map_hud),

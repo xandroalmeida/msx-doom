@@ -1,6 +1,6 @@
 # Posto Umbra
 
-FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores de 32 × 44 células, quatro portões por setor, três dificuldades e duas armas. O cartucho linear ocupa 16 KiB.
+FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores de 32 × 44 células, quatro portões por setor, três dificuldades e duas armas. O cartucho linear ocupa 32 KiB.
 
 ## Fases
 
@@ -9,6 +9,8 @@ FPS original inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem t
 - **Reator.** Três alas compridas, com passagens paralelas e galerias estreitas, ligam a entrada ao transmissor de superfície.
 
 ## Abertura
+
+A tela de título mostra o Posto Umbra ao anoitecer em pixel art. As estrelas e o farol da antena piscam, e as luzes da entrada pulsam.
 
 **Sinal de Umbra** é o tema original da tela de título. O arranjo em 7/8 usa os três canais de tom do PSG e mistura percussão de ruído ao baixo. As barras na tela acompanham os canais. A faixa repete a cada 22,4 segundos e silencia ao iniciar a campanha. Ao voltar ao título, ela recomeça do primeiro compasso.
 
@@ -70,7 +72,7 @@ python -m pip install pyz80==1.3.0
 python tools/build.py
 ```
 
-O build valida a ordem dos portões e a rota de cada setor, gera as tabelas e preenche a imagem até 16 KiB. A opção `--assembler caminho/pyz80.py` permite usar diretamente o script do montador.
+O build valida a ordem dos portões e a rota de cada setor, gera as tabelas e preenche a imagem até 32 KiB. A opção `--assembler caminho/pyz80.py` permite usar diretamente o script do montador.
 
 ## Repetir a validação
 
@@ -81,7 +83,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a música a 50 e 60 Hz, as três dificuldades, a variação de posições, o reinício com a mesma distribuição e o acesso às chaves. Ela também percorre a campanha com os controles do jogo e verifica combate, cura, derrota, o HUD e o minimapa. A validação em um MSX1 físico ainda está pendente.
+Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a música a 50 e 60 Hz, a arte animada, a inicialização em subslot, as três dificuldades, a variação de posições e o acesso às chaves. Ela também percorre a campanha com os controles do jogo e verifica combate, cura, derrota, o HUD e o minimapa. A validação em um MSX1 físico ainda está pendente.
 
 ## Código
 
@@ -89,6 +91,7 @@ Os arquivos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifi
 - [Cartucho, movimento e renderização de paredes](src/posto-umbra.z80)
 - [Campanha, carregamento de setores e som](src/campaign.z80)
 - [Reprodução da abertura no PSG](src/opening.z80)
+- [Pixel art e quadros de animação da abertura](tools/title_art.py)
 - [Partitura em formato editável](tools/opening.py)
 - [Combate e interação](src/combat.z80)
 - [Projeção de objetos e HUD](src/objects.z80)
