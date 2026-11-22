@@ -20,7 +20,7 @@ def main():
     output = ROOT / "build"
     output.mkdir(exist_ok=True)
     source = output / "posto-umbra.generated.z80"
-    modules = ("posto-umbra.z80", "combat.z80", "objects.z80")
+    modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80")
     assembly = "\n".join((ROOT / "src" / module).read_text() for module in modules)
     source.write_text(assembly + "\n" + generate())
     binary = output / "posto-umbra.bin"

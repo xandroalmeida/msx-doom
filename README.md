@@ -16,9 +16,17 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Girar | ← e → | Esquerda e direita |
 | Atirar | Espaço | Botão A |
 | Abrir a porta | Shift | Botão B |
+| Abrir ou fechar o menu de pausa | M | A e B juntos |
+| Mostrar a legenda ou o mapa no menu | ← e → | Esquerda e direita |
 | Reiniciar após vencer ou morrer | Espaço | Botão A |
 
 Comece com dois tiros. A caixa amarela fornece mais quatro. Aproxime-se da porta depois de eliminar o monstro, abra-a e siga até o sinal verde. Se o monstro alcançar você, ele pode causar dano repetidamente. Com a vida zerada, pressione Espaço para tentar de novo.
+
+## Legenda e mapa
+
+Pressione **M** para pausar na **Legenda**. Pressione **→** para ver o **Mapa**, **←** para voltar à legenda e **M** para retomar a partida. A seta branca indica sua posição e aproxima a direção da câmera à direção cardinal mais próxima. O mapa acompanha a abertura da porta, o movimento do monstro e a coleta de munição. Se você ocupar a mesma célula de outro marcador, a seta fica visível por cima.
+
+Os símbolos da legenda e do mapa são gerados com os tiles da fase a partir de `TERRAIN` e `OBJECT_ART`. Ao acrescentar ou alterar um tipo de terreno ou objeto visível, mantenha sua entrada nesses registros. Para um novo objeto dinâmico, atualize também o desenho de marcadores no menu e a verificação correspondente no WebMSX.
 
 ## Compilar
 
@@ -39,10 +47,10 @@ O teste usa o núcleo do [WebMSX 6.0.8 C-BIOS](https://github.com/ppeccin/WebMSX
 
 ```sh
 curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/6.0/cbios/embedded/wmsx.js -o build/wmsx.js
-node tests/webmsx.cjs build/wmsx.js build/posto-umbra.ppm
+node tests/webmsx.cjs build/wmsx.js build/posto-umbra.ppm build/legenda.ppm build/mapa.ppm
 ```
 
-O último argumento é opcional e grava um quadro com o monstro e o clarão do tiro. O teste cobre teclado, joystick, carregamento de VRAM, acerto, tiro bloqueado pela porta, clarão, PSG, perseguição, ataque, coleta, vitória, derrota e reinício. No primeiro segundo de avanço com o monstro vivo, a build exibiu 14 quadros a 60 Hz e 15 a 50 Hz. O teste em um MSX1 físico continua pendente.
+Os três argumentos depois de `wmsx.js` são opcionais e gravam o combate, a legenda e o mapa. O teste cobre teclado, joystick, VRAM, pausa, posição e direção no mapa, mudanças de porta e objetos, combate, PSG, vitória, derrota e reinício. No primeiro segundo de avanço com o monstro vivo, esta versão exibiu 14 quadros a 60 Hz e 16 a 50 Hz. O teste em um MSX1 físico continua pendente.
 
 ## Código
 
@@ -50,5 +58,6 @@ O último argumento é opcional e grava um quadro com o monstro e o clarão do t
 - [Cartucho, movimento e renderização das paredes](src/posto-umbra.z80)
 - [Combate, interação e regras da fase](src/combat.z80)
 - [Projeção de objetos e HUD](src/objects.z80)
+- [Menu de pausa, legenda e mapa](src/menu.z80)
 - [Mapa, tiles e tabelas de projeção](tools/tables.py)
 - [Teste automatizado no WebMSX](tests/webmsx.cjs)

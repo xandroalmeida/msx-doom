@@ -13,6 +13,9 @@ obj_row:     equ &c28b
 side_sign:   equ &c28d
 
 render_scene:
+    ld a,(menu_state)
+    or a
+    jp nz,render_menu
     call render_view
     ld a,(outcome)
     or a

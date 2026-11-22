@@ -1,0 +1,162 @@
+; The game simulation stops while either tab is open.
+map_inset: equ 2
+
+toggle_menu:
+    ld a,(menu_state)
+    or a
+    ld a,0
+    jr nz,select_menu
+    inc a
+select_menu:
+    ld (menu_state),a
+    jp mark_dirty
+
+menu_tick:
+    call read_direction
+    cp 3                          ; right: map
+    jr z,select_map
+    cp 7                          ; left: legend
+    ret nz
+    ld a,1
+    jr change_tab
+select_map:
+    ld a,2
+change_tab:
+    ld hl,menu_state
+    cp (hl)
+    ret z
+    jr select_menu
+
+; Terminate the sprite list while the panel occupies the viewport.
+show_game_sprites:
+    ld a,(menu_state)
+    or a
+    ld a,92
+    jr z,write_first_sprite
+    ld a,208
+write_first_sprite:
+    ld hl,&1b00
+    jp WRTVRM
+
+render_menu:
+    ld hl,view
+    ld (hl),0                     ; tile zero is blank
+    ld de,view+1
+    ld bc,view_size-1
+    ldir
+    ld hl,menu_hud
+    ld de,hud
+    ld bc,32
+    ldir
+    ld a,(menu_state)
+    dec a
+    ld hl,legend_panel
+    jp z,draw_panel
+    call draw_map
+    ld hl,map_panel
+
+draw_panel:
+    ld a,(hl)
+    or a
+    ret z
+    ld c,a
+    ld b,0
+    inc hl
+    ld e,(hl)
+    inc hl
+    ld a,(hl)
+    add a,view/256
+    ld d,a
+    inc hl
+    ldir
+    jr draw_panel
+
+draw_map:
+    ld ix,live_map
+    ld de,view+map_inset
+    ld b,16
+map_row:
+    ld c,16
+map_square:
+    ld l,(ix+0)
+    ld h,terrain_tiles/256        ; table starts just after the aligned world map
+    ld a,(hl)
+    ld (de),a
+    inc ix
+    inc de
+    dec c
+    jr nz,map_square
+    ld a,e
+    add a,16
+    ld e,a
+    jr nc,map_next_row
+    inc d
+map_next_row:
+    djnz map_row
+
+    ld a,(door_open)
+    or a
+    jr z,map_exit_marker
+    ld a,door_index
+    ld c,map_open_door
+    call plot_map
+map_exit_marker:
+    ld a,exit_index
+    ld c,map_exit
+    call plot_map
+    ld a,(supplies)
+    or a
+    jr z,map_enemy_marker
+    ld a,ammo_index
+    ld c,map_ammo
+    call plot_map
+map_enemy_marker:
+    ld a,(enemy_hp)
+    or a
+    jr z,map_player_marker
+    ld c,map_creature
+    ld hl,enemy_x+1
+    ld a,(enemy_y+1)
+    call map_coordinates
+    call plot_map
+map_player_marker:
+    ld a,(heading)
+    add a,8
+    and &30
+    rrca
+    rrca
+    rrca
+    rrca
+    ld e,a
+    ld d,0
+    ld hl,map_arrows
+    add hl,de
+    ld c,(hl)
+    ld hl,player_x+1
+    ld a,(player_y+1)
+    call map_coordinates
+
+; A is the packed cell index and C is the tile. Player is drawn last.
+plot_map:
+    ld b,a
+    and &0f
+    ld e,a
+    ld d,0
+    ld a,b
+    and &f0
+    ld l,a
+    ld h,d
+    add hl,hl
+    add hl,de
+    ld de,view+map_inset
+    add hl,de
+    ld (hl),c
+    ret
+
+map_coordinates:
+    rlca
+    rlca
+    rlca
+    rlca
+    or (hl)
+    ret

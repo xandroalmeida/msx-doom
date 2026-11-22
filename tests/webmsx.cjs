@@ -4,9 +4,9 @@ const { readFileSync, writeFileSync } = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const [, , emulatorPath, snapshotPath] = process.argv;
+const [, , emulatorPath, snapshotPath, legendPath, mapPath] = process.argv;
 if (!emulatorPath) {
-    console.error("Uso: node tests/webmsx.cjs caminho/para/wmsx.js [captura.ppm]");
+    console.error("Uso: node tests/webmsx.cjs caminho/para/wmsx.js [combate.ppm] [legenda.ppm] [mapa.ppm]");
     process.exit(1);
 }
 
@@ -18,9 +18,16 @@ assert.equal(
 );
 const cartridge = readFileSync(path.join(__dirname, "../build/posto-umbra.rom"));
 const symbols = readFileSync(path.join(__dirname, "../build/posto-umbra.sym"), "utf8");
-const creatureArt = Number.parseInt(symbols.match(/^([0-9a-f]+)=creature_tiles$/im)[1], 16);
-const creatureTiles = new Set(cartridge.subarray(creatureArt - 0x4000, creatureArt - 0x4000 + 30));
+function romTiles(label, length) {
+    const match = symbols.match(new RegExp(`^([0-9a-f]+)=${label}$`, "im"));
+    const offset = Number.parseInt(match[1], 16) - 0x4000;
+    return cartridge.subarray(offset, offset + length);
+}
+const creatureTiles = new Set(romTiles("creature_tiles", 30));
 creatureTiles.delete(0);
+const terrain = romTiles("terrain_tiles", 4);
+const playerArrows = romTiles("map_arrows", 4);
+const visibleObjects = ["creature_tiles", "ammo_tiles", "exit_tiles"].map((label) => romTiles(label, 1)[0]);
 
 // Start the authentic machine and VDP, with a minimal host for the video output.
 const core = new vm.Script(
@@ -66,12 +73,13 @@ function boot(frequency) {
         VDP_CLOCK_MODE: 1,
     });
     const machine = new wmsx.Machine();
-    const inputs = { keys: 0, stick: 0, shift: false };
+    const inputs = { keys: 0, stick: 0, shift: false, menu: false };
     machine.getControllersSocket().connectControls({
         resetControllers: noop,
         readKeyboardPort(row) {
             if (row === 8) return 255 ^ inputs.keys;
             if (row === 6 && inputs.shift) return 254;
+            if (row === 4 && inputs.menu) return 251;
             return 255;
         },
         readControllerPort: (port) => port === 0 ? 255 ^ inputs.stick : 255,
@@ -154,7 +162,7 @@ function checkVideo(run) {
 const state = {
     playerY: 0xc202, heading: 0xc204, page: 0xc205, shown: 0xc20b, life: 0xc20f,
     ammo: 0xc210, monster: 0xc211, monsterY: 0xc214, pickup: 0xc217,
-    door: 0xc218, outcome: 0xc219, hint: 0xc21a, flash: 0xc21b, map: 0xc300,
+    door: 0xc218, outcome: 0xc219, hint: 0xc21a, flash: 0xc21b, menu: 0xc225, map: 0xc300,
 };
 const up = 0x20;
 const down = 0x40;
@@ -165,6 +173,16 @@ const doorNorthing = 0x0640;
 
 function creatureTileCount(demo) {
     return demo.currentView().filter((tile) => creatureTiles.has(tile)).length;
+}
+
+function mapTile(demo, x, y) {
+    return demo.currentView()[y * 32 + 2 + x];
+}
+
+function checkPlayerMarker(demo) {
+    const [x, y] = demo.xy().map((coord) => coord >> 8);
+    const direction = ((demo.read(state.heading) + 8) >> 4) & 3;
+    assert.equal(mapTile(demo, x, y), playerArrows[direction]);
 }
 
 function press(demo, input, value) {
@@ -208,6 +226,40 @@ for (const frequency of [60, 50]) {
     const initialView = demo.currentView();
     assert.ok(new Set(initialView).size > 4, "O primeiro quadro deve conter a cena.");
     assert.ok(creatureTileCount(demo) > 0, "O monstro deve aparecer ao fundo ao iniciar.");
+
+    press(demo, "menu", true);
+    assert.equal(read("menu"), 1);
+    assert.equal(demo.video().vram[0x1b00], 208, "Arma e mira devem sumir durante a pausa.");
+    const legend = demo.currentView();
+    for (const [index, tile] of terrain.entries()) assert.equal(legend[(5 + 2 * index) * 32 + 2], tile);
+    const openDoor = legend[13 * 32 + 2];
+    assert.notEqual(openDoor, terrain[3]);
+    for (const [index, tile] of [playerArrows[0], ...visibleObjects].entries()) {
+        assert.equal(legend[(5 + 2 * index) * 32 + 20], tile);
+    }
+    if (frequency === 60 && legendPath) saveFrame(demo.frame, legendPath);
+
+    press(demo, "keys", right);
+    assert.equal(read("menu"), 2);
+    checkVideo(demo);
+    checkPlayerMarker(demo);
+    assert.equal(mapTile(demo, 0, 0), terrain[1]);
+    assert.equal(mapTile(demo, 4, 10), terrain[2]);
+    assert.equal(mapTile(demo, 5, 5), terrain[3]);
+    assert.equal(mapTile(demo, 5, 8), visibleObjects[0]);
+    assert.equal(mapTile(demo, 5, 11), visibleObjects[1]);
+    assert.equal(mapTile(demo, 5, 3), visibleObjects[2]);
+    if (frequency === 60 && mapPath) saveFrame(demo.frame, mapPath);
+    press(demo, "keys", up | space);
+    assert.deepEqual(demo.xy(), startPosition, "O mapa deve pausar o jogador.");
+    assert.equal(read("ammo"), 2, "Espaço no mapa não deve disparar.");
+    press(demo, "stick", 0x04);
+    assert.equal(read("menu"), 1);
+    assert.deepEqual(demo.currentView(), legend);
+    press(demo, "menu", true);
+    assert.equal(read("menu"), 0);
+    assert.equal(demo.video().vram[0x1b00], 92);
+    assert.deepEqual(demo.currentView(), initialView);
 
     // Hold the trigger across many simulation ticks. The first shot should hit
     // only once, show a flash in the VDP and put real noise on PSG channel A.
@@ -260,6 +312,15 @@ for (const frequency of [60, 50]) {
     press(demo, frequency === 60 ? "shift" : "stick", frequency === 60 ? true : 0x20);
     assert.equal(read("door"), 1);
     assert.equal(demo.read(state.map + 0x55), 0);
+    press(demo, "menu", true);
+    press(demo, "stick", 0x08);
+    assert.equal(read("menu"), 2);
+    checkPlayerMarker(demo);
+    assert.notEqual(mapTile(demo, 5, 12), playerArrows[0], "O marcador deve sair da posição inicial.");
+    assert.equal(mapTile(demo, 5, 5), openDoor);
+    assert.equal(mapTile(demo, 5, 8), terrain[0], "O monstro derrotado deve sumir do mapa.");
+    assert.equal(mapTile(demo, 5, 11), terrain[0], "A caixa coletada deve sumir do mapa.");
+    press(demo, "menu", true);
     holdUntil(demo, up, () => read("outcome") === 2);
     assert.equal(read("life"), 5);
     const victoryView = demo.currentView();
@@ -300,6 +361,15 @@ for (const frequency of [60, 50]) {
     assert.ok(diagonalTurn > 0 && diagonalTurn < 8);
     assert.ok(demo.xy()[1] > previousY, "A diagonal deve recuar e girar juntas.");
     checkVideo(demo);
+    holdUntil(demo, right, () => heading() >= 8 && heading() < 24);
+    press(demo, "stick", 0x30); // A+B
+    assert.equal(read("menu"), 1);
+    assert.equal(read("ammo"), 2, "O atalho do joystick não deve disparar.");
+    press(demo, "keys", right);
+    assert.equal(read("menu"), 2);
+    assert.equal(mapTile(demo, ...demo.xy().map((coord) => coord >> 8)), playerArrows[1]);
+    press(demo, "stick", 0x30);
+    assert.equal(read("menu"), 0);
 
     // Stage the same actor on the other side of the closed door. This isolates
     // occlusion, hitscan and enemy sight from the timing of the chase.
@@ -327,6 +397,23 @@ for (const frequency of [60, 50]) {
     const combatFps = arena.read(state.shown);
     arena.run(10);
     assert.ok(creatureTileCount(arena) > farTiles, "O monstro deve crescer na tela ao se aproximar.");
+    press(arena, "menu", true);
+    press(arena, "keys", right);
+    const lifeOnPause = arena.read(state.life);
+    const getEnemyPosition = () => [0xc212, state.monsterY].map((address) =>
+        arena.read(address) | (arena.read(address + 1) << 8));
+    const enemyPosition = getEnemyPosition();
+    const enemyCell = enemyPosition.map((coordinate) => coordinate >> 8);
+    const playerCell = arena.xy().map((coordinate) => coordinate >> 8);
+    if (playerCell[0] === enemyCell[0] && playerCell[1] === enemyCell[1]) {
+        checkPlayerMarker(arena);
+    } else {
+        assert.equal(mapTile(arena, ...enemyCell), visibleObjects[0]);
+    }
+    arena.run(180);
+    assert.equal(arena.read(state.life), lifeOnPause);
+    assert.deepEqual(getEnemyPosition(), enemyPosition);
+    press(arena, "menu", true);
     const ammoBeforeShot = arena.read(state.ammo);
     arena.inputs.keys = space;
     let combatFrameSeen = false;
@@ -342,5 +429,5 @@ for (const frequency of [60, 50]) {
     assert.equal(arena.read(state.monster), 1);
     assert.ok(combatFrameSeen, "Um disparo e o monstro devem aparecer no mesmo quadro.");
     assert.ok(combatFps >= 12);
-    console.log(`MSX1 64 KiB, ${frequency} Hz: tiro, PSG, munição, oclusão, porta, vitória, derrota e reinício OK. Avanço com monstro vivo: ${combatFps} quadros apresentados em 1 s.`);
+    console.log(`MSX1 64 KiB, ${frequency} Hz: legenda, mapa, pausa, tiro, PSG, munição, oclusão, porta, vitória, derrota e reinício OK. Avanço com monstro vivo: ${combatFps} quadros apresentados em 1 s.`);
 }

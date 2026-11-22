@@ -43,6 +43,7 @@ line_y:     equ &c21e
 line_dx:    equ &c220
 line_dy:    equ &c222
 line_count: equ &c224
+menu_state: equ &c225             ; 0 game, 1 legend, 2 map
 hud:        equ &c240             ; one row immediately below the viewport
 wall_depth: equ &c260             ; one distance per screen column
 live_map:   equ &c300             ; one aligned page for terrain and door
@@ -65,6 +66,7 @@ start:
     xor a
     ld (buttons),a
     ld (shown),a
+    ld (menu_state),a
     call reset_level
     ld a,6
     ld (front_page),a
@@ -108,6 +110,7 @@ tick_check:
     ld b,a
     ld c,2
     call WRTVDP
+    call show_game_sprites
     call show_flash
     ld hl,shown
     inc (hl)
@@ -185,16 +188,19 @@ sprites:
     db 208
 sprites_end:
 
-read_controls:
+read_direction:
     xor a
     call GTSTCK                    ; arrows
     or a
-    jr nz,stick_ready
+    ret nz
     ld a,1
     call GTSTCK                    ; joystick port 1
     or a
+    ret
+
+read_controls:
+    call read_direction
     ret z
-stick_ready:
     add a,a
     ld e,a
     ld d,0
@@ -411,10 +417,10 @@ wall_hit:
     ld de,65
     dec a
     jr z,template_offset
+material_span:
     add hl,de
     dec a
-    jr z,template_offset
-    add hl,de
+    jr nz,material_span
 template_offset:
     add hl,hl
     add hl,hl
