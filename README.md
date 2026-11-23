@@ -1,338 +1,147 @@
 # Posto Umbra
 
-[English](#english) · [Português](#português) · [Español](#español)
+[Português](#português) · [English](#english) · [Español](#español) · [Guia técnico](docs/TECNICO.md)
 
-## Screenshots · Capturas de tela · Capturas de pantalla
-
-| Title screen · Abertura · Pantalla de título | Gameplay · Em jogo · En partida |
+| Capa da caixa · Box cover · Portada | Rótulo do cartucho · Cartridge label · Etiqueta |
 | :---: | :---: |
-| ![Pixel-art title screen with an outpost at dusk and a difficulty selector](docs/screenshots/title.png) | ![First-person view of the Depot with an enemy, stone walls, a minimap and the HUD](docs/screenshots/gameplay.png) |
-| **Pause map · Mapa de pausa · Mapa de pausa** | **Map legend · Legenda do mapa · Leyenda del mapa** |
-| ![Pause map with walls, doors, items, enemies and the player's position](docs/screenshots/map.png) | ![Map legend showing the symbols for terrain, gates, enemies and items](docs/screenshots/legend.png) |
-
-## English
-
-Posto Umbra is an original Doom-inspired first-person shooter for the **MSX1 with 64 KiB of RAM**. Each campaign draws 12 different sectors from a catalog of 21. Each sector has 32 × 44 tiles and two to four gates. It features three difficulty levels, two weapons and a 32 KiB linear cartridge ROM.
-
-### Original sectors
-
-- **Depot (Depósito).** Cargo stacks and parallel corridors connect the loading dock, pump room and evacuation control room.
-- **Foundry (Fundição).** Keys in the western rooms open gates on the east side. Service corridors lead to extra supplies.
-- **Reactor (Reator).** Parallel passages and narrow galleries link three long wings from the entrance to the surface transmitter.
-
-The 18 additional sectors include dry docks, narrow service wings, industrial yards and laboratories.
-
-### Music and title screen
-
-The pixel-art title screen shows Posto Umbra at dusk. Stars and the antenna beacon blink, and the entrance lights pulse. **Sinal de Umbra**, the original title theme, uses all three PSG tone channels and adds noise percussion to the bass line in 7/8 time. The on-screen meters follow the channels. The theme loops every 22.4 seconds, stops when you start the campaign and restarts from the first bar when you return to the title screen.
-
-The campaign uses three original tracks assigned by sector. **Ecos do Depósito**, **Forja Vermelha** and **Núcleo de Vidro** combine melody and bass in loops of about 26 seconds. Campaign music starts enabled. Press **T** or **B + right** during play or on the pause screen to toggle it. Sound effects stay active, and your choice carries across sectors and retries.
-
-### How to play
-
-Build the ROM using the instructions below, then drop `build/posto-umbra.rom` into [WebMSX in MSX1 mode with 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64) or load it in [openMSX](https://openmsx.org/manual/setup.html#cbios).
-
-```sh
-openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
-```
-
-| Action | Keyboard | Joystick port 1 |
-| --- | --- | --- |
-| Select difficulty on the title screen | ← / → | Left / right |
-| Start, advance, confirm a retry or return to the title after the ending | Space | Button A |
-| Walk forward or backward | ↑ / ↓ | Up / down |
-| Turn | ← / → | Left / right |
-| Move and turn together | Hold two perpendicular arrows | Diagonal |
-| Fire or hold for repeated shots | Space | Button A |
-| Switch weapons | X | B + up |
-| Open a door | Shift | Button B |
-| Open or close the pause menu | M | A + B |
-| Toggle the live minimap | N | B + down |
-| Toggle campaign music | T | B + right |
-| Switch between the pause map, legend and controls | ← / → | Left / right |
-| Scroll the pause map | ↑ / ↓ | Up / down |
-| Restart the current sector | R | — |
-
-Select **Fácil** (Easy), **Normal** or **Difícil** (Hard) on the title screen before pressing Space or A. Normal is the default.
-
-| Difficulty | Enemies per sector | Enemy behavior |
-| --- | --- | --- |
-| Easy | 8–10 | Shorter detection range, slower pursuit and longer intervals between attacks. |
-| Normal | 11–13 | Moderate detection range, pursuit speed and attack frequency. |
-| Hard | 14–16 | Longer detection range, faster pursuit and shorter intervals between attacks. |
-
-The pistol uses one round and can hit distant targets. The pulse weapon uses two rounds and deals two points of damage at short range. Yellow ammo boxes provide eight rounds, and hearts restore up to two health points. Purple brutes can take more hits and attack from farther away.
-
-Find the keys in each sector, open their gates and eliminate every enemy. The green exit clears the sector only after the last enemy is defeated. Your starting health and ammo are restored in each new sector and on each retry. Press Space after the ending screen to return to the title.
-
-Each campaign draws three sectors from each of four bands of map complexity. The first three have wide rooms, short routes and two gates. The next three have longer routes and three gates. The last six have four gates and lead into longer mazes. Within each band, sectors are ordered by required route length, with combat and supplies breaking ties. The game also randomizes enemy, ammo, health and key positions, using free tiles and keeping each key reachable before its gate. Restarting or retrying a sector preserves both its positions and the campaign order.
-
-The 3D view takes up 256 × 184 pixels. The compass at the top of the HUD has a round dial with a yellow needle that turns with your aim. The Portuguese labels use **L** for east and **O** for west. The compass stays visible when you hide the minimap. The bottom HUD row shows health, ammo, your weapon, the campaign step (S01–S12) and an objective hint. When you get hit, a heart becomes hollow, the scene flashes red and the PSG plays a short impact sound. All five hearts appear hollow on the defeat screen.
-
-### Minimap and pause map
-
-The live minimap in the top-right corner shows terrain, passage status and an arrow for your position and heading. Press **N** to toggle it. Your choice is kept until you power off or reload the cartridge.
-
-**M** pauses the game and opens the map at your current position. **↑/↓** scroll the map. Press **→** to open the legend, then press it again to see the controls for keyboard and joystick. **←** goes back one tab and **M** resumes play. The white arrow shows your position and heading. This map also shows open and closed gates, enemies, ammo, health, keys and the exit.
-
-The map and legend symbols use level tiles from `TERRAIN` and `OBJECT_ART`. When adding or changing a visible terrain or object type, update those definitions and the test. For new dynamic objects, update marker drawing in the pause menu as well.
-
-### Build from source
-
-Use Python 3.8 or later and the [pyz80 assembler](https://github.com/simonowen/pyz80).
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install pyz80==1.3.0
-python tools/build.py
-```
-
-The build checks gate order and routes through each sector, generates tables and pads the ROM to 32 KiB. To run the assembler directly from a script file, pass `--assembler path/to/pyz80.py`.
-
-### Run the emulator tests
-
-The test uses the [WebMSX 6.0.8 C-BIOS core](https://github.com/ppeccin/WebMSX/blob/master/release/stable/6.0/cbios/embedded/wmsx.js) with Node.js 20 and a 64 KiB MSX1 at its standard clock speed. Build the ROM first.
-
-```sh
-curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/6.0/cbios/embedded/wmsx.js -o build/wmsx.js
-node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
-```
-
-Capture paths are optional. The WAV is recorded from the emulated PSG. The suite checks the soundtrack at 50 and 60 Hz, including all three campaign tracks, their loops, the controls and playback after sound effects. It also checks title animation, cartridge boot from a subslot, the three difficulty levels, randomized placements, access to keys, all 21 maps and two full 12-sector campaigns. Testing on physical MSX1 hardware is pending.
-
-### Source files
-
-- [Plan and resource budget (Portuguese)](PLAN.md)
-- [Cartridge entry point, movement and wall rendering](src/posto-umbra.z80)
-- [Campaign, sector loading and sound effects](src/campaign.z80)
-- [Title music playback on the PSG](src/opening.z80)
-- [Title pixel art and animation frames](tools/title_art.py)
-- [Editable title score](tools/opening.py)
-- [Campaign scores](tools/music.py)
-- [In-game music playback and controls](src/music.z80)
-- [Combat and interaction](src/combat.z80)
-- [Object projection and HUD](src/objects.z80)
-- [Map and legend](src/menu.z80)
-- [Level maps and route validation](tools/levels.py)
-- [18 additional maps](tools/additional_sectors.py)
-- [Art and table generation](tools/tables.py)
-- [Automated WebMSX tests](tests/webmsx.cjs)
+| [<img src="docs/packaging/capa-posto-umbra.png" width="260" alt="Capa de Posto Umbra. Um explorador se aproxima de um bunker iluminado sob um sol vermelho.">](docs/packaging/capa-posto-umbra.png) | [<img src="docs/packaging/rotulo-posto-umbra.png" width="330" alt="Rótulo de Posto Umbra para MSX, com o bunker, a antena e o sol vermelho.">](docs/packaging/rotulo-posto-umbra.png) |
 
 ## Português
 
-Posto Umbra é um jogo original de tiro em primeira pessoa inspirado em Doom para **MSX1 com 64 KiB de RAM**. Cada campanha sorteia 12 setores diferentes de um catálogo de 21. Cada setor tem 32 × 44 células e de dois a quatro portões. O jogo oferece três dificuldades e duas armas em um cartucho linear de 32 KiB.
+**Posto Umbra** é um jogo original de tiro em primeira pessoa para **MSX1 com 64 KiB de RAM**. Explore uma instalação isolada, administre a munição e recupere o posto setor por setor.
 
-### Fases originais
+### O sinal de Umbra
 
-- **Depósito.** Pilhas de carga e corredores paralelos ligam a doca, a sala de bombas e o controle de evacuação.
-- **Fundição.** As chaves ficam nas salas a oeste e abrem portões no lado leste. Desvios pelos corredores de serviço dão acesso a suprimentos.
-- **Reator.** Três alas compridas, com passagens paralelas e galerias estreitas, ligam a entrada ao transmissor de superfície.
+A última transmissão chegou ao anoitecer. A central ouviu o identificador do posto, três bipes e uma voz entrecortada pelo ruído. “Os portões fecharam. As luzes ainda estão acesas.” O rádio ficou mudo. No alto da serra, o farol vermelho da antena continuou piscando a noite inteira.
 
-As 18 fases adicionais incluem docas, alas de serviço, pátios industriais e laboratórios.
+Você chega no fim do dia seguinte. Há energia na entrada, caixas de suprimentos no chão e criaturas entre a doca e as alas internas. Os depósitos, a fundição e o reator ainda estão ligados pelos corredores de serviço. As chaves ficaram do lado de dentro.
 
-### Música e abertura
+Sua missão é recuperar o posto. Abra caminho, elimine todos os inimigos de cada setor e siga até o sinal verde. Do outro lado da serra, a central espera ouvir a antena de novo. Desta vez, a voz será sua.
 
-A tela de título mostra o Posto Umbra ao anoitecer em pixel art. As estrelas e o farol da antena piscam, e as luzes da entrada pulsam. **Sinal de Umbra**, o tema original da abertura, usa os três canais de tom do PSG e mistura percussão de ruído ao baixo em compasso de 7/8. As barras na tela acompanham os canais. A faixa repete a cada 22,4 segundos, para ao iniciar a campanha e recomeça do primeiro compasso ao voltar ao título.
+### A campanha
 
-A campanha usa três faixas originais, distribuídas entre os setores. **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro** combinam melodia e baixo em ciclos de cerca de 26 segundos. A trilha vem ligada. **T** ou **B + direita** alternam a música na partida ou na pausa. Os efeitos sonoros continuam ativos, e a preferência vale entre setores e novas tentativas.
+- **12 fases por partida.** São sorteadas três de cada faixa de complexidade, entre 21 mapas. A campanha começa em salas amplas com dois portões, passa por setores com três e chega a labirintos mais longos com quatro.
+- **Três dificuldades.** Fácil tem 8 a 10 inimigos por setor e dá mais tempo entre ataques. Normal, a seleção inicial, tem 11 a 13. Difícil tem 14 a 16, com perseguição mais rápida e detecção a maior distância.
+- **Duas armas.** A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas e causa dois pontos de dano a curta distância. Caixas amarelas dão oito cargas e corações restauram até dois pontos de vida. Os brutos roxos resistem a mais disparos.
+- **Objetivos.** Recolha as chaves, abra os portões e elimine todos os inimigos antes de sair. Se houver sobreviventes ao abrir o último portão ou chegar à saída, o HUD mostra **MATE TODOS**. Uma nova campanha sorteia os mapas e as posições dos inimigos e itens. Reiniciar uma fase preserva a distribuição e repõe vida e munição.
 
-### Jogar
+### Como jogar
 
-Compile a ROM conforme as instruções abaixo e arraste `build/posto-umbra.rom` para o [WebMSX em modo MSX1 com 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64) ou carregue o arquivo no [openMSX](https://openmsx.org/manual/setup.html#cbios).
+Use o arquivo `posto-umbra.rom` no seu MSX1 ou em um emulador. [Abrir o WebMSX no perfil MSX1 com 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64)
 
-```sh
-openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
-```
-
-| Ação | Teclado | Joystick da porta 1 |
+| Ação | Teclado | Joystick na porta 1 |
 | --- | --- | --- |
-| Escolher a dificuldade na tela de título | ← / → | Esquerda / direita |
-| Começar, avançar, tentar de novo ou voltar ao título após o final | Espaço | Botão A |
+| Escolher a dificuldade no título | ← / → | Esquerda / direita |
+| Começar, avançar, tentar de novo ou voltar ao título após o final | Espaço | A |
 | Avançar ou recuar | ↑ / ↓ | Cima / baixo |
 | Girar | ← / → | Esquerda / direita |
 | Andar e girar ao mesmo tempo | Duas setas perpendiculares | Diagonal |
-| Atirar ou manter uma sequência de disparos | Espaço | Botão A |
+| Atirar, com repetição ao segurar | Espaço | A |
 | Trocar de arma | X | B + cima |
-| Abrir uma porta | Shift | Botão B |
-| Abrir ou fechar o menu de pausa | M | A + B |
-| Mostrar ou ocultar o minimapa | N | B + baixo |
-| Ligar ou desligar a trilha da campanha | T | B + direita |
-| Alternar entre mapa de pausa, legenda e comandos | ← / → | Esquerda / direita |
+| Abrir portão | Shift | B |
+| Pausar ou retomar | M | A + B |
+| Alternar o minimapa | N | B + baixo |
+| Alternar a música | T | B + direita |
+| Mudar a aba da pausa | ← / → | Esquerda / direita |
 | Rolar o mapa de pausa | ↑ / ↓ | Cima / baixo |
-| Reiniciar o setor atual | R | — |
+| Reiniciar a fase | R | — |
 
-Na tela de título, escolha **Fácil**, **Normal** ou **Difícil** antes de apertar Espaço ou o botão A. A seleção inicial é Normal.
+A bússola aponta na direção da mira. O minimapa mostra o terreno ao redor e uma seta indica sua posição. Na pausa, a seta para a direita abre a **Legenda** e mais um toque abre **Comandos**. O mapa de pausa mostra também inimigos, chaves, suprimentos, portões e a saída.
 
-| Dificuldade | Inimigos por setor | Comportamento |
+O tema **Sinal de Umbra** toca na abertura. Os setores usam **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro**. O controle de música silencia a trilha da campanha e os efeitos sonoros continuam ativos.
+
+## English
+
+**Posto Umbra** is an original first-person shooter for **MSX1 with 64 KiB of RAM**. Explore an isolated facility, manage your ammunition and reclaim the outpost one sector at a time.
+
+### The Umbra signal
+
+The final transmission came at dusk. Command heard the outpost's call sign, three beeps and a voice breaking through the static. “The gates are sealed. The lights are still on.” The radio fell silent. Up on the ridge, the antenna's red beacon blinked all night.
+
+You reach the bunker at the end of the following day. The entrance still has power. Supply crates sit on the floor and creatures prowl between the loading dock and the inner wings. Service corridors still link the depot, foundry and reactor. The keys are inside.
+
+Your mission is to reclaim the outpost. Open the gates, clear each sector of enemies and follow the green exit marker. Across the ridge, command is waiting for another signal. This time, the voice will be yours.
+
+### The campaign
+
+- **12 sectors per campaign.** The game draws three maps from each of four complexity bands, out of 21 maps. It starts with spacious rooms and two gates, then adds a third gate and eventually reaches longer four-gate mazes.
+- **Three difficulty levels.** Easy has 8–10 enemies per sector and longer gaps between attacks. Normal is the default and has 11–13. Hard has 14–16, with faster pursuit and longer detection range.
+- **Two weapons.** The long-range pistol spends one round. The short-range pulse gun spends two rounds to deal two damage. Yellow boxes give eight rounds, hearts restore up to two health points, and purple brutes can take more hits.
+- **Objectives.** Find the keys, open the gates and defeat every enemy before leaving. **MATE TODOS** means enemies are still alive. New campaigns reshuffle maps and positions. Retrying a sector restores health and ammo and keeps its layout.
+
+### How to play
+
+Load `posto-umbra.rom` on an MSX1 or in an emulator. [Open WebMSX in MSX1 mode with 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64)
+
+| Action | Keyboard | Joystick in port 1 |
 | --- | --- | --- |
-| Fácil | 8 a 10 | Percebem o jogador de mais perto, perseguem mais devagar e dão mais tempo entre ataques. |
-| Normal | 11 a 13 | Alcance de detecção, velocidade de perseguição e frequência de ataque intermediários. |
-| Difícil | 14 a 16 | Percebem de mais longe, perseguem mais rápido e atacam com intervalos menores. |
+| Select difficulty on the title screen | ← / → | Left / right |
+| Start, advance, retry or return to the title after the ending | Space | A |
+| Walk forward or backward | ↑ / ↓ | Up / down |
+| Turn | ← / → | Left / right |
+| Move and turn together | Two perpendicular arrows | Diagonal |
+| Fire, or hold to repeat | Space | A |
+| Switch weapon | X | B + up |
+| Open a gate | Shift | B |
+| Pause or resume | M | A + B |
+| Toggle the minimap | N | B + down |
+| Toggle the music | T | B + right |
+| Change pause tab | ← / → | Left / right |
+| Scroll the pause map | ↑ / ↓ | Up / down |
+| Restart the sector | R | — |
 
-A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. As caixas amarelas fornecem oito cargas, e os corações recuperam até dois pontos de vida. O bruto roxo aguenta mais disparos e alcança o jogador de mais longe no ataque.
+The compass follows your aim, and the minimap shows nearby terrain and your position. From the pause map, press right for the **Legenda** (legend) and right again for **Comandos** (controls). The pause map also shows enemies, keys, supplies, gates and the exit.
 
-Encontre as chaves de cada setor, abra os portões correspondentes e elimine todos os inimigos. O sinal verde só encerra a fase depois que o último inimigo cair. O HUD mostra **MATE TODOS** se ainda houver inimigos ao abrir o último portão ou chegar à saída. A vida e a munição iniciais são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
-
-Cada campanha sorteia três setores de cada uma das quatro faixas de complexidade. As três primeiras fases têm salas amplas, rotas curtas e dois portões. As três seguintes têm rotas mais longas e três portões. As seis finais têm quatro portões e chegam aos labirintos mais longos. Dentro de cada faixa, a ordem segue o comprimento da rota obrigatória, com combate e suprimentos como critérios de desempate. O jogo também sorteia as posições de inimigos, munição, cura e chaves, usando células livres e mantendo cada chave acessível antes do portão correspondente. Reiniciar ou tentar de novo preserva as posições do setor e a ordem da campanha.
-
-A visão 3D ocupa 256 × 184 pixels. A bússola no topo do HUD tem um mostrador circular com **N**, **L**, **S** e **O**. O ponteiro amarelo gira junto com a mira, mesmo com o minimapa desligado. A linha inferior mostra corações, munição, arma, posição na campanha (S01–S12) e uma dica de objetivo. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
-
-### Minimapa e mapa de pausa
-
-O minimapa no canto superior direito mostra o terreno, o estado das passagens e uma seta com a posição e a direção do jogador. **N** alterna a exibição durante a partida. A preferência vale até desligar ou recarregar o cartucho.
-
-**M** pausa e abre o mapa na altura do jogador. **↑/↓** rolam o mapa. Aperte **→** para abrir a legenda e mais uma vez para ver os comandos de teclado e joystick. **←** volta uma aba e **M** retoma a partida. A seta branca indica a posição e a direção do jogador. Este mapa também mostra portões abertos e fechados, inimigos, munição, cura, chaves e a saída.
-
-Os símbolos da legenda e do mapa usam os tiles da fase definidos em `TERRAIN` e `OBJECT_ART`. Ao mudar ou adicionar um tipo de terreno ou objeto visível, atualize esses registros e o teste. Para um novo objeto dinâmico, atualize também o desenho de marcadores no menu de pausa.
-
-### Compilar
-
-Use Python 3.8 ou superior e o [montador pyz80](https://github.com/simonowen/pyz80).
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install pyz80==1.3.0
-python tools/build.py
-```
-
-O build valida a ordem dos portões e a rota de cada setor, gera as tabelas e preenche a ROM até 32 KiB. A opção `--assembler caminho/pyz80.py` permite usar diretamente o script do montador.
-
-### Repetir a validação
-
-O teste usa o núcleo do [WebMSX 6.0.8 C-BIOS](https://github.com/ppeccin/WebMSX/blob/master/release/stable/6.0/cbios/embedded/wmsx.js) com Node.js 20, em um MSX1 de 64 KiB com clock padrão. Compile a ROM primeiro.
-
-```sh
-curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/6.0/cbios/embedded/wmsx.js -o build/wmsx.js
-node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
-```
-
-Os caminhos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a trilha a 50 e 60 Hz, incluindo as três faixas da campanha, seus ciclos, os atalhos e a retomada após os efeitos sonoros. Também verifica a arte animada da abertura, a inicialização em subslot, as três dificuldades, a variação de posições, o acesso às chaves, os 21 mapas e duas campanhas completas de 12 fases. A validação em um MSX1 físico continua pendente.
-
-### Código
-
-- [Plano e orçamento](PLAN.md)
-- [Cartucho, movimento e renderização de paredes](src/posto-umbra.z80)
-- [Campanha, carregamento de setores e efeitos sonoros](src/campaign.z80)
-- [Reprodução da abertura no PSG](src/opening.z80)
-- [Pixel art e quadros de animação da abertura](tools/title_art.py)
-- [Partitura editável da abertura](tools/opening.py)
-- [Partituras da campanha](tools/music.py)
-- [Reprodução e controle da trilha durante o jogo](src/music.z80)
-- [Combate e interação](src/combat.z80)
-- [Projeção de objetos e HUD](src/objects.z80)
-- [Mapa e legenda](src/menu.z80)
-- [Mapas das fases e validação das rotas](tools/levels.py)
-- [18 mapas adicionais](tools/additional_sectors.py)
-- [Arte e geração de tabelas](tools/tables.py)
-- [Testes automatizados no WebMSX](tests/webmsx.cjs)
+**Sinal de Umbra** plays on the title screen. The sectors use **Ecos do Depósito**, **Forja Vermelha** and **Núcleo de Vidro**. The music toggle silences the campaign music and keeps sound effects active.
 
 ## Español
 
-Posto Umbra es un juego original de disparos en primera persona inspirado en Doom para **MSX1 con 64 KiB de RAM**. Cada campaña sortea 12 sectores distintos de un catálogo de 21. Cada sector tiene 32 × 44 casillas y entre dos y cuatro portones. El juego ofrece tres niveles de dificultad y dos armas en un cartucho lineal de 32 KiB.
+**Posto Umbra** es un juego original de disparos en primera persona para **MSX1 con 64 KiB de RAM**. Explora una instalación aislada, administra la munición y recupera el puesto sector por sector.
 
-### Niveles originales
+### La señal de Umbra
 
-- **Almacén (Depósito).** Las pilas de carga y los pasillos paralelos conectan el muelle, la sala de bombas y la sala de control de evacuación.
-- **Fundición (Fundição).** Las llaves de las salas del oeste abren los portones del este. Los pasillos de servicio llevan a suministros adicionales.
-- **Reactor (Reator).** Pasajes paralelos y galerías estrechas enlazan tres alas largas entre la entrada y el transmisor de superficie.
+La última transmisión llegó al anochecer. La central oyó el identificador del puesto, tres pitidos y una voz entrecortada por la estática. «Los portones se han cerrado. Las luces siguen encendidas». La radio enmudeció. En lo alto de la sierra, la baliza roja de la antena siguió parpadeando toda la noche.
 
-Los 18 niveles adicionales incluyen diques, alas de servicio, patios industriales y laboratorios.
+Llegas al búnker al final del día siguiente. La entrada todavía tiene energía. Hay cajas de suministros en el suelo y criaturas entre el muelle y las alas interiores. Los corredores de servicio siguen conectando el depósito, la fundición y el reactor. Las llaves quedaron dentro.
 
-### Música y pantalla de título
+Tu misión es recuperar el puesto. Abre los portones, elimina a todos los enemigos de cada sector y sigue la señal verde. Al otro lado de la sierra, la central espera otra transmisión. Esta vez, la voz será la tuya.
 
-La pantalla de título muestra el puesto al anochecer en pixel art. Las estrellas y la baliza de la antena parpadean, y las luces de la entrada pulsan. **Sinal de Umbra**, el tema original de inicio, usa los tres canales de tono del PSG y combina percusión de ruido con el bajo en un compás de 7/8. Las barras en pantalla siguen la actividad de los canales. El tema se repite cada 22,4 segundos, se detiene al comenzar la campaña y vuelve al primer compás al regresar al título.
+### La campaña
 
-La campaña usa tres temas originales asignados a los sectores. **Ecos do Depósito**, **Forja Vermelha** y **Núcleo de Vidro** combinan melodía y bajo en bucles de unos 26 segundos. La música está activada al inicio. Pulsa **T** o **B + derecha** durante la partida o en pausa para activarla o desactivarla. Los efectos sonoros siguen activos, y tu elección se conserva entre sectores y reintentos.
+- **12 niveles por partida.** El juego sortea tres mapas de cada una de las cuatro franjas de complejidad, entre 21 mapas. Empieza en salas amplias con dos portones, añade un tercero y acaba en laberintos más largos con cuatro.
+- **Tres dificultades.** Fácil tiene 8–10 enemigos por sector y deja más tiempo entre ataques. Normal es la selección inicial y tiene 11–13. Difícil tiene 14–16, con persecución más rápida y mayor alcance de detección.
+- **Dos armas.** La pistola gasta una carga y alcanza objetivos distantes. El arma de pulso gasta dos cargas y causa dos puntos de daño a corta distancia. Las cajas amarillas dan ocho cargas, los corazones restauran hasta dos puntos de vida y los brutos morados resisten más disparos.
+- **Objetivos.** Busca las llaves, abre los portones y elimina a todos los enemigos antes de salir. **MATE TODOS** indica que aún quedan enemigos. Una nueva campaña vuelve a sortear los mapas y las posiciones. Reintentar restaura la vida y la munición y conserva la distribución del sector.
 
 ### Cómo jugar
 
-Compila la ROM siguiendo las instrucciones de abajo y arrastra `build/posto-umbra.rom` a [WebMSX en modo MSX1 con 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64) o cárgala en [openMSX](https://openmsx.org/manual/setup.html#cbios).
-
-```sh
-openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
-```
+Carga `posto-umbra.rom` en tu MSX1 o en un emulador. [Abrir WebMSX en modo MSX1 con 64 KiB](https://webmsx.org/?MACHINE=MSX1A&RAMNORMAL_SIZE=64)
 
 | Acción | Teclado | Mando del puerto 1 |
 | --- | --- | --- |
-| Elegir la dificultad en la pantalla de título | ← / → | Izquierda / derecha |
-| Empezar, avanzar, reintentar o volver al título tras el final | Espacio | Botón A |
+| Elegir dificultad en la pantalla de título | ← / → | Izquierda / derecha |
+| Empezar, avanzar, reintentar o volver al título tras el final | Espacio | A |
 | Avanzar o retroceder | ↑ / ↓ | Arriba / abajo |
 | Girar | ← / → | Izquierda / derecha |
 | Moverse y girar a la vez | Dos flechas perpendiculares | Diagonal |
-| Disparar o mantener el fuego | Espacio | Botón A |
+| Disparar, o mantener para repetir | Espacio | A |
 | Cambiar de arma | X | B + arriba |
-| Abrir una puerta | Mayús | Botón B |
-| Abrir o cerrar el menú de pausa | M | A + B |
-| Mostrar u ocultar el minimapa | N | B + abajo |
-| Activar o desactivar la música de la campaña | T | B + derecha |
-| Alternar entre el mapa de pausa, la leyenda y los controles | ← / → | Izquierda / derecha |
+| Abrir un portón | Mayús | B |
+| Pausar o reanudar | M | A + B |
+| Alternar el minimapa | N | B + abajo |
+| Alternar la música | T | B + derecha |
+| Cambiar de pestaña en pausa | ← / → | Izquierda / derecha |
 | Desplazar el mapa de pausa | ↑ / ↓ | Arriba / abajo |
-| Reiniciar el sector actual | R | — |
+| Reiniciar el sector | R | — |
 
-En la pantalla de título, elige **Fácil**, **Normal** o **Difícil** antes de pulsar Espacio o el botón A. La opción inicial es Normal.
+La brújula sigue la mira y el minimapa indica el terreno cercano y tu posición. Desde el mapa de pausa, pulsa derecha para ver **Legenda** y otra vez para abrir **Comandos**. El mapa de pausa también muestra enemigos, llaves, suministros, portones y la salida.
 
-| Dificultad | Enemigos por sector | Comportamiento |
-| --- | --- | --- |
-| Fácil | 8–10 | Detectan al jugador a menor distancia, persiguen más despacio y dejan más tiempo entre ataques. |
-| Normal | 11–13 | Alcance de detección, velocidad de persecución y frecuencia de ataque intermedios. |
-| Difícil | 14–16 | Detectan al jugador desde más lejos, persiguen más rápido y atacan con intervalos más cortos. |
+**Sinal de Umbra** suena en la pantalla de título. Los sectores tienen tres temas originales, **Ecos do Depósito**, **Forja Vermelha** y **Núcleo de Vidro**. El control de música silencia la banda sonora de la campaña y deja activos los efectos.
 
-La pistola consume una carga y alcanza objetivos distantes. El arma de pulso consume dos cargas e inflige dos puntos de daño a corta distancia. Las cajas amarillas aportan ocho cargas y los corazones recuperan hasta dos puntos de vida. El bruto morado resiste más disparos y ataca desde más lejos.
+## Capturas de tela · Screenshots · Capturas de pantalla
 
-Encuentra las llaves de cada sector, abre sus portones y elimina a todos los enemigos. La salida verde solo permite completar el nivel después de derrotar al último enemigo. La vida y la munición se reponen a sus valores iniciales en cada sector y en cada reintento. Pulsa Espacio tras la pantalla final para volver al título.
-
-Cada campaña sortea tres sectores de cada una de las cuatro franjas de complejidad. Los primeros tres niveles tienen salas amplias, rutas cortas y dos portones. Los tres siguientes tienen rutas más largas y tres portones. Los seis últimos tienen cuatro portones y dan paso a laberintos más largos. Dentro de cada franja, el orden sigue la longitud de la ruta obligatoria, con el combate y los suministros como criterios de desempate. El juego también distribuye al azar los enemigos, la munición, la curación y las llaves en casillas libres, manteniendo cada llave accesible antes de su portón. Reiniciar o reintentar un sector conserva sus posiciones y el orden de la campaña.
-
-La vista 3D ocupa 256 × 184 píxeles. La brújula superior tiene una esfera circular con una aguja amarilla que gira con la mira. Las etiquetas en portugués usan **L** para el este y **O** para el oeste. La brújula sigue visible al ocultar el minimapa. La fila inferior muestra los corazones, la munición, el arma, la posición en la campaña (S01–S12) y una pista del objetivo. Al recibir daño, un corazón se vacía, la escena parpadea en rojo y el PSG reproduce un sonido breve de impacto. En la pantalla de derrota aparecen los cinco corazones vacíos.
-
-### Minimapa y mapa de pausa
-
-El minimapa de la esquina superior derecha muestra el terreno, el estado de los pasos y una flecha con tu posición y orientación. Pulsa **N** para mostrarlo u ocultarlo. Tu elección se conserva hasta apagar o volver a cargar el cartucho.
-
-**M** pausa la partida y abre el mapa en tu posición actual. **↑/↓** desplazan el mapa. Pulsa **→** para abrir la leyenda y otra vez para ver los controles de teclado y mando. **←** retrocede una pestaña y **M** reanuda la partida. La flecha blanca señala tu posición y orientación. Este mapa también muestra portones abiertos y cerrados, enemigos, munición, curación, llaves y la salida.
-
-Los símbolos del mapa y la leyenda usan los gráficos del nivel definidos en `TERRAIN` y `OBJECT_ART`. Si añades o modificas un tipo de terreno u objeto visible, actualiza esas definiciones y la prueba. Para un nuevo objeto dinámico, actualiza también el dibujo de los marcadores en el menú de pausa.
-
-### Compilar
-
-Usa Python 3.8 o posterior y el [ensamblador pyz80](https://github.com/simonowen/pyz80).
-
-```sh
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install pyz80==1.3.0
-python tools/build.py
-```
-
-El proceso de compilación valida el orden de los portones y la ruta de cada sector, genera las tablas y rellena la ROM hasta 32 KiB. La opción `--assembler ruta/pyz80.py` permite ejecutar directamente el script del ensamblador.
-
-### Ejecutar las pruebas en el emulador
-
-La prueba usa el núcleo [WebMSX 6.0.8 C-BIOS](https://github.com/ppeccin/WebMSX/blob/master/release/stable/6.0/cbios/embedded/wmsx.js) con Node.js 20, en un MSX1 de 64 KiB con su frecuencia de reloj estándar. Compila primero la ROM.
-
-```sh
-curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/6.0/cbios/embedded/wmsx.js -o build/wmsx.js
-node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
-```
-
-Las rutas de captura son opcionales. El WAV se graba a partir del PSG emulado. Las pruebas verifican la música a 50 y 60 Hz, incluidas las tres pistas de campaña, sus bucles, los controles y la reanudación tras los efectos sonoros. También comprueban la animación del título, el arranque desde una subranura, los tres niveles de dificultad, la distribución aleatoria, el acceso a las llaves, los 21 mapas y dos campañas completas de 12 niveles. La validación en un MSX1 físico sigue pendiente.
-
-### Código
-
-- [Plan y presupuesto de recursos (en portugués)](PLAN.md)
-- [Inicio del cartucho, movimiento y renderizado de paredes](src/posto-umbra.z80)
-- [Campaña, carga de sectores y efectos sonoros](src/campaign.z80)
-- [Reproducción de la música de inicio en el PSG](src/opening.z80)
-- [Pixel art y fotogramas de la animación de inicio](tools/title_art.py)
-- [Partitura editable del tema de inicio](tools/opening.py)
-- [Partituras de la campaña](tools/music.py)
-- [Reproducción y control de la música durante la partida](src/music.z80)
-- [Combate e interacción](src/combat.z80)
-- [Proyección de objetos y HUD](src/objects.z80)
-- [Mapa y leyenda](src/menu.z80)
-- [Mapas de los niveles y validación de rutas](tools/levels.py)
-- [18 mapas adicionales](tools/additional_sectors.py)
-- [Gráficos y generación de tablas](tools/tables.py)
-- [Pruebas automatizadas en WebMSX](tests/webmsx.cjs)
+| Abertura · Title · Título | Em jogo · Gameplay · En partida |
+| :---: | :---: |
+| ![Tela de título em pixel art com o bunker e o seletor de dificuldade](docs/screenshots/title.png) | ![Visão do Depósito em primeira pessoa com um inimigo e o minimapa](docs/screenshots/gameplay.png) |
+| **Mapa de pausa · Pause map · Mapa de pausa** | **Legenda · Legend · Leyenda** |
+| ![Mapa de pausa com portões, suprimentos, inimigos e a posição do jogador](docs/screenshots/map.png) | ![Legenda do mapa com símbolos para o terreno e os objetos](docs/screenshots/legend.png) |
