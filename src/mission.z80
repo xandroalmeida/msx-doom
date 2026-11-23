@@ -1,0 +1,16 @@
+; Z if every enemy in the active difficulty list has been defeated.
+enemies_remaining:
+    ld a,(enemy_end)
+    ld c,a
+    ld hl,enemies+actor_hp
+    ld a,l
+scan_enemy_health:
+    cp c
+    ret z
+    ld a,(hl)
+    or a
+    ret nz
+    ld a,l
+    add a,entity_size
+    ld l,a
+    jr scan_enemy_health

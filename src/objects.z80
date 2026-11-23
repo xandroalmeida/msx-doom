@@ -123,6 +123,7 @@ draw_farthest:
     jr render_object_queue
 
 render_hud:
+    call draw_compass_face
     ld a,(minimap)
     or a
     call nz,draw_minimap
@@ -140,8 +141,17 @@ hud_weapon:
     ld de,hud+hud_weapon_offset
     ld bc,7
     ldir
-    ld a,(sector)
+    ld a,(campaign_step)
     inc a
+    cp 10
+    ld b,0
+    jr c,hud_sector_units
+    sub 10
+    inc b
+hud_sector_units:
+    call digit_tile
+    ld (hud+hud_sector_offset+1),a
+    ld a,b
     call digit_tile
     ld (hud+hud_sector_offset),a
     ld a,(ammo)
@@ -167,13 +177,13 @@ ammo_units:
     ld a,(hint)
     add a,a
     ld e,a
+    add a,a
+    add a,a
+    add a,e                       ; fixed-width hints use ten tiles each
+    ld e,a
     ld d,0
-    ld hl,hud_hint_addresses
+    ld hl,hud_hints
     add hl,de
-    ld a,(hl)
-    inc hl
-    ld h,(hl)
-    ld l,a
     ld de,hud+hud_hint_offset
     ld bc,hud_hint_width
     ldir

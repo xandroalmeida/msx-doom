@@ -61,35 +61,54 @@ TRACKS = (
 )
 
 
+def compile_bars(name, steps, measures, order):
+    """Render a bar for each occurrence, keeping held notes across boundaries."""
+    if not order or steps < 1:
+        raise ValueError(f"Faixa sem compassos em {name}.")
+    periods = [0, 0]
+    for measure in order:
+        voices = [line.split() for line in measures[measure]]
+        if any(len(voice) != steps for voice in voices):
+            raise ValueError(f"Compasso {measure + 1} incompleto em {name}.")
+        frames = []
+        for notes in zip(*voices):
+            attack, decay = [], []
+            for channel, token in enumerate(notes):
+                gain = (10, 8)[channel]
+                onset = token not in ("-", ".")
+                if onset:
+                    pitch = token.rstrip("!")
+                    periods[channel] = psg_period(pitch)
+                    gain += token.endswith("!")
+                elif token == ".":
+                    periods[channel] = 0
+                else:
+                    gain -= 1
+                period = periods[channel]
+                attack.append((gain << 12) | period if period else 0)
+                decay.append(((gain - (3 if onset else 1)) << 12) | period if period else 0)
+            frames.extend(attack + decay)
+        yield tuple(frames)
+
+
 def gameplay_score():
-    """Compile attack and decay frames as 12-bit period plus 4-bit volume."""
+    """Store each rendered bar and each volume/period word once."""
     profiles = ["game_music_tracks:"]
-    scores = []
+    words, patterns = {}, {}
+    orders, bars = [], []
     for index, (name, tempo, steps, measures, order) in enumerate(TRACKS):
         label = f"game_music_{index}"
         profiles.extend((f"    dw {label}", f"    db {tempo}"))
-        periods = [0, 0]
-        frames = []
-        for measure in order:
-            voices = [line.split() for line in measures[measure]]
-            if any(len(voice) != steps for voice in voices):
-                raise ValueError(f"Compasso {measure + 1} incompleto em {name}.")
-            for notes in zip(*voices):
-                attack, decay = [], []
-                for channel, token in enumerate(notes):
-                    gain = (10, 8)[channel]
-                    onset = token not in ("-", ".")
-                    if onset:
-                        pitch = token.rstrip("!")
-                        periods[channel] = psg_period(pitch)
-                        gain += token.endswith("!")
-                    elif token == ".":
-                        periods[channel] = 0
-                    else:
-                        gain -= 1
-                    period = periods[channel]
-                    attack.append((gain << 12) | period if period else 0)
-                    decay.append(((gain - (3 if onset else 1)) << 12) | period if period else 0)
-                frames.extend(attack + decay)
-        scores.extend((data(label, (*frames, 0xFFFF), "dw"), f"{label}_end:"))
-    return "\n".join((*profiles, *scores))
+        bar_order = []
+        for frames in compile_bars(name, steps, measures, order):
+            if frames not in patterns:
+                pattern = f"game_music_bar_{len(patterns)}"
+                patterns[frames] = pattern
+                packed = [words.setdefault(word, len(words)) for word in frames]
+                bars.append(data(pattern, (*packed, 0xff)))
+            bar_order.append(patterns[frames])
+        orders.append(data(label, (*bar_order, 0), "dw"))
+
+    if len(words) > 0xff:
+        raise ValueError("A trilha usa mais de 255 palavras de volume e período.")
+    return "\n".join((*profiles, data("game_music_words", words, "dw"), *orders, *bars))

@@ -27,6 +27,8 @@ intro_start:
     and &c0
     ld (intro_io),a               ; preserve the PSG's joystick I/O direction
     xor a
+    ld (effect_timer),a           ; gameplay effects must not cut off title music
+    ld (flash),a
     ld (intro_phase),a
     ld (intro_left),a
     ld hl,intro_order

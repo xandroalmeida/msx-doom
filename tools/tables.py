@@ -3,7 +3,7 @@
 from itertools import groupby
 from math import cos, pi, sin
 
-from levels import HEIGHT, sector_data
+from levels import HEIGHT
 
 RAY_LIMIT = 224
 WALL_PROJECTION = 460
@@ -209,6 +209,81 @@ def panel_data(field, rows):
         offset = row * 32 + column
         blocks.extend((len(tiles), offset & 255, offset >> 8, *tiles))
     return data(field, (*blocks, 0))
+
+
+def compass_data(upper_tiles):
+    """Build a fixed dial and one eight-pixel sprite for each needle position."""
+    size, center = 32, 16
+    screen_x, screen_y = 112, 8
+    dial = [[0] * size for _ in range(size)]
+
+    for y, row in enumerate(dial):
+        for x in range(size):
+            distance = (x - 15.5) ** 2 + (y - 15.5) ** 2
+            if 14.4 ** 2 <= distance <= 15.6 ** 2:
+                row[x] = 5
+    for x, y in ((7, 7), (24, 7), (24, 24), (7, 24), (16, 16)):
+        dial[y][x] = 7
+
+    for x, y, glyph in (
+        (14, 3, (17, 25, 21, 19, 17)),       # N
+        (25, 14, (16, 16, 16, 16, 31)),     # L
+        (14, 25, (15, 16, 14, 1, 30)),      # S
+        (2, 14, (14, 17, 17, 17, 14)),      # O
+    ):
+        for row, mask in enumerate(glyph, y):
+            for column in range(5):
+                if mask & (16 >> column):
+                    dial[row][x + column] = 15
+
+    art, face = {}, []
+    for y in range(0, size, 8):
+        for x in range(0, size, 8):
+            tile = tuple(
+                (sum(128 >> bit for bit, color in enumerate(row[x:x + 8]) if color),
+                 max(row[x:x + 8]) << 4 | 1)
+                for row in dial[y:y + 8]
+            )
+            face.append(art.setdefault(tile, len(art)))
+
+    first = next((slot for slot in range(256 - len(art), -1, -1)
+                  if upper_tiles.isdisjoint(range(slot, slot + len(art)))), None)
+    if first is None:
+        raise ValueError("Sem tiles contíguos para a bússola no banco superior.")
+    upper_tiles.update(range(first, first + len(art)))
+
+    needle_positions, needle_patterns = [], []
+    for bearing in range(32):
+        angle = bearing * 2 * pi / 32
+        points = set()
+        for y in range(-7, 8):
+            for x in range(-7, 8):
+                forward = x * sin(angle) - y * cos(angle)
+                side = abs(x * cos(angle) + y * sin(angle))
+                shaft = 0 <= forward <= 5 and side < 0.84
+                tip = 3.1 <= forward <= 7.5 and side <= (7.6 - forward) * 0.62
+                if shaft or tip:
+                    points.add((x, y))
+        left = min(x for x, _ in points)
+        top = min(y for _, y in points)
+        if any(x >= left + 8 or y >= top + 8 for x, y in points):
+            raise ValueError("Ponteiro da bússola excede um sprite.")
+        needle_positions.extend((screen_y + center + top - 1, screen_x + center + left))
+        for y in range(top, top + 8):
+            needle_patterns.append(sum(128 >> bit for bit in range(8) if (left + bit, y) in points))
+
+    return (
+        f"compass_offset: equ {screen_y // 8 * 32 + screen_x // 8}",
+        f"compass_width: equ {size // 8}",
+        f"compass_vram: equ {first * 8}",
+        f"compass_art_bytes: equ {len(art) * 8}",
+        f"compass_needle_bytes: equ {len(needle_patterns)}",
+        data("compass_face", (first + tile for tile in face)),
+        data("compass_patterns", (pattern for tile in art for pattern, _ in tile)),
+        data("compass_colors", (color for tile in art for _, color in tile)),
+        data("compass_needle_patterns", needle_patterns),
+        data("compass_needle_positions", needle_positions),
+    )
 
 
 def sloped_caps(heights, walls, palettes, ceiling, floor, used_tiles):
@@ -451,13 +526,13 @@ def generate():
     meter_active = tile([(bits, 0x71) for bits in (0, 0, 0x7e, 0x7e, 0x7e, 0x7e, 0, 0)])
     heart_empty = tile([(bits, 0xe1) for bits in (0, 0x66, 0x99, 0x81, 0x42, 0x24, 0x18, 0)])
     ammo_icon = next(art[0] for kind, _, art in objects if kind == "ammo")
-    hud = [blank] + [heart_full] * MAX_LIFE + [blank, ammo_icon]
+    hud = [heart_full] * MAX_LIFE + [blank, ammo_icon]
     ammo_offset = len(hud)
     hud += [blank] * 3
     weapon_offset = len(hud)
     hud += [blank] * 7 + label(" S", 7)
     sector_offset = len(hud)
-    hud += [blank] * 2
+    hud += [blank] * 3
     hint_offset = len(hud)
     hint_width = 32 - hint_offset
     hud.extend([blank] * hint_width)
@@ -466,12 +541,13 @@ def generate():
     hints = (
         "ACHE CHAVE", "ABRA PORTA", "ACHE SAIDA", "SEM MUN",
         "MUN EXTRA", "TRANCADA", "CURA EXTRA", "MUSICA SIM", "MUSICA NAO",
+        "MATE TODOS",
     )
+    if hint_width != 10:
+        raise ValueError("A rotina do HUD espera dicas com dez tiles.")
     if any(len(message) > hint_width for message in hints):
         raise ValueError("Mensagem de objetivo excede a largura disponível no HUD.")
-    hint_labels = [f"hud_hint_{index}" for index in range(len(hints))]
     hint_tiles = [label(message.ljust(hint_width), 11) for message in hints]
-    hint_rows = [data(name, tiles) for name, tiles in zip(hint_labels, hint_tiles)]
     if len(tile_ids) > 256:
         raise ValueError("SCREEN 2 admite até 256 tiles por banco.")
 
@@ -483,6 +559,7 @@ def generate():
     used_tiles[2].update(menu_hud + map_hud + hud + weapons + digits + [heart_empty, meter_idle, meter_active])
     used_tiles[2].update(difficulty_names)
     used_tiles[2].update(index for hint in hint_tiles for index in hint)
+    compass = compass_data(used_tiles[0])
     caps = sloped_caps(wall_heights, walls, stone_palettes, ceiling, floor, used_tiles)
 
     walk_vectors, ray_vectors, camera_vectors = [], [], []
@@ -517,6 +594,7 @@ def generate():
         # The aligned terrain lookup and this depth lookup share a ROM page.
         data("heights", (wall_heights.index(height) for height in heights)),
         *caps,
+        *compass,
         f"wall_extension_count: equ {len(extension_rows)}",
         data("wall_extensions", extension_rows),
         *(data(f"{kind}_tiles", art) for kind, _, art in objects),
@@ -524,7 +602,7 @@ def generate():
         data("object_offsets", (0, 1, 5, 14)),
         data("hud_template", hud),
         f"max_life: equ {MAX_LIFE}",
-        "hud_life_offset: equ 1",
+        "hud_life_offset: equ 0",
         f"hud_weapon_offset: equ {weapon_offset}",
         f"hud_sector_offset: equ {sector_offset}",
         f"hud_ammo_offset: equ {ammo_offset}",
@@ -533,8 +611,9 @@ def generate():
         data("hud_hearts", (heart_empty, heart_full)),
         data("weapon_names", weapons),
         data("hud_digits", digits),
-        data("hud_hint_addresses", hint_labels, "dw"),
-        *hint_rows,
+        f"hint_find_exit: equ {hints.index('ACHE SAIDA')}",
+        f"hint_clear_enemies: equ {hints.index('MATE TODOS')}",
+        data("hud_hints", (tile for hint in hint_tiles for tile in hint)),
         *campaign_panels,
         title_panel,
         data("difficulty_names", difficulty_names),
@@ -551,7 +630,6 @@ def generate():
         )),
         data("prop_art", ("ammo_tiles", "medic_tiles", "key_tiles", 0, "exit_tiles"), "dw"),
         data("prop_icons", ("map_ammo", heart_full, "map_key", "map_open_door", "map_exit")),
-        sector_data(data),
         f"intro_meter_idle: equ {meter_idle}",
         f"intro_meter_active: equ {meter_active}",
         "",

@@ -72,12 +72,12 @@ show_game_sprites:
     ld a,(menu_state)
     ld hl,outcome
     or (hl)
-    ld a,92
-    jr z,write_first_sprite
-    ld a,208
-write_first_sprite:
     ld hl,&1b00
-    jp WRTVRM
+    ld a,208
+    jp nz,WRTVRM
+    ld a,92
+    call WRTVRM
+    jp draw_compass_needle
 
 render_menu:
     call clear_view

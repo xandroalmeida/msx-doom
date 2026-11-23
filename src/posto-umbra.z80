@@ -52,7 +52,7 @@ line_dx:    equ &f120
 line_dy:    equ &f122
 line_count: equ &f124
 menu_state: equ &f125             ; 0 game, 1 legend, 2 map
-sector:     equ &f126
+campaign_step: equ &f126         ; index in the current campaign
 minimap:    equ &f127             ; user preference for the current session
 effect_timer: equ &f128
 ray_quadrant: equ &f129
@@ -77,6 +77,7 @@ rng_state:  equ &f14c
 placement_pass: equ &f14e
 display_pending: equ &f14f
 title_phase: equ &f150
+sector_track: equ &f15e
 actor_hp:   equ 0
 actor_x:    equ 1
 actor_y:    equ 3
@@ -95,6 +96,7 @@ wall_faces: equ &f1c0
 wall_style: equ &f1e0             ; overlaps the title meters during gameplay
 live_map:   equ &c400             ; 32 cells per page, one page per row
 enemies:    equ live_map+32       ; unused bytes after the first terrain row
+campaign_pool: equ enemies+16*entity_size ; difficulty ranks, after the enemy list
 props:      equ live_map+256+32   ; unused bytes after the second terrain row
 wall_cache: equ live_map+512+32   ; one projected height per terrain row's padding
 frame_size: equ 768
@@ -123,7 +125,7 @@ start:
     ld (buttons),a
     ld (shown),a
     ld (menu_state),a
-    ld (sector),a
+    ld (damage_phase),a
     ld (title_direction),a
     ld (display_pending),a
     ld (music_running),a
@@ -131,10 +133,6 @@ start:
     ld (minimap),a
     ld (difficulty),a
     ld (music_enabled),a
-    ld hl,1
-    ld (level_seed),hl
-    call configure_difficulty
-    call reset_level
     call intro_start
     ld a,4
     ld (outcome),a
@@ -337,6 +335,18 @@ load_game_video:
     ld hl,tile_colors
     ld de,&2800
     call upload_tile_bank
+    ld hl,compass_patterns
+    ld de,compass_vram
+    ld bc,compass_art_bytes
+    call LDIRVM
+    ld hl,compass_colors
+    ld de,&2000+compass_vram
+    ld bc,compass_art_bytes
+    call LDIRVM
+    ld hl,compass_needle_patterns
+    ld de,&3800+sprite_patterns_end-sprite_patterns
+    ld bc,compass_needle_bytes
+    call LDIRVM
     jp upload_slopes
 
 blank_for_scene_change:
@@ -430,6 +440,8 @@ pistol_sprite_body:
     db 167,120,1,14, 167,128,2,14
     db 175,120,3,14, 175,128,4,14
     db 167,120,6,5, 167,128,7,5
+compass_sprite:
+    db 209,0,compass_first_sprite_pattern,11
     db 208
 sprites_end:
 pulse_sprite_body:

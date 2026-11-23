@@ -22,7 +22,17 @@ reset_level:
     jp music_reset
 
 load_sector:
-    ld a,(sector)
+    ld hl,campaign_step
+    ld a,sector_count-1
+    sub (hl)
+    ld e,a
+    ld d,0
+    ld hl,campaign_pool
+    add hl,de
+    ld e,(hl)
+    ld hl,sector_difficulty_order
+    add hl,de
+    ld a,(hl)
     add a,a
     ld e,a
     ld d,0
@@ -37,6 +47,9 @@ load_sector:
     ld d,(hl)
     inc hl
     push de                       ; compressed terrain
+    ld a,(hl)
+    ld (sector_track),a
+    inc hl
     ld a,(hl)
     ld (player_x+1),a
     inc hl
@@ -71,30 +84,77 @@ load_sector:
     ld (prop_end),a
 
     pop hl
+    call unpack_terrain
+    jp randomize_sector
+
+unpack_terrain:
+    ; Maps store only interior blocks. Fill in the stone border first.
     ld de,live_map
-    ld c,map_width
-unpack_run:
-    ld a,(hl)
-    inc hl
-    ld b,a
-    and 3
-    srl b
-    srl b
-    inc b
-unpack_cell:
+    ld c,map_height
+    ld a,1
+unpack_stone_row:
+    ld b,map_width
+    ld e,0
+unpack_stone_cell:
     ld (de),a
     inc e
-    dec c
-    jr nz,unpack_next
-    ld e,0
+    djnz unpack_stone_cell
     inc d
-    ld c,map_width
-unpack_next:
-    djnz unpack_cell
+    dec c
+    jr nz,unpack_stone_row
+
+    ld de,live_map+256+1
+    ld c,(map_height-2)/terrain_block_size
+unpack_band:
+    ld e,1
+    ld b,(map_width-2)/terrain_block_size
+unpack_block:
+    push bc
+    ld a,(hl)
+    inc hl
+    push hl
+    ld l,a
+    ld h,0
+    ld c,a
+    ld b,0
+    add hl,hl
+    add hl,bc
+    ld bc,terrain_blocks
+    add hl,bc
+    push de
+    ld b,terrain_block_size
+unpack_block_row:
+    ld a,(hl)
+    inc hl
+    ld c,terrain_block_size
+unpack_block_cell:
+    push af
+    and 3
+    ld (de),a
+    pop af
+    rrca
+    rrca
+    inc e
+    dec c
+    jr nz,unpack_block_cell
+    ld a,e
+    sub terrain_block_size
+    ld e,a
+    inc d
+    djnz unpack_block_row
+    pop de
+    ld a,e
+    add a,terrain_block_size
+    ld e,a
+    pop hl
+    pop bc
+    djnz unpack_block
     ld a,d
-    cp live_map/256+map_height
-    jr nz,unpack_run
-    jp randomize_sector
+    add a,terrain_block_size
+    ld d,a
+    dec c
+    jr nz,unpack_band
+    ret
 
 enemy_skip:
     db 6*entity_size,3*entity_size,0
@@ -299,7 +359,7 @@ campaign_action:
     jr z,campaign_restart
     cp 2
     jr nz,load_next
-    ld hl,sector
+    ld hl,campaign_step
     inc (hl)
     ld hl,(rng_state)
     ld (level_seed),hl
@@ -307,10 +367,9 @@ load_next:
     jp reset_level
 campaign_restart:
     xor a
-    ld (sector),a
     ld (title_direction),a
     ld (music_running),a
-    call reset_level
+    call clear_damage_feedback
     call blank_for_scene_change
     call load_title_video
     call intro_start
@@ -354,12 +413,76 @@ begin_campaign:
     jr nz,campaign_seed
     inc l
 campaign_seed:
+    ld (rng_state),hl
+    xor a
+    ld (campaign_step),a
+    call draw_campaign
+    ld hl,(rng_state)
     ld (level_seed),hl
     call configure_difficulty
     call blank_for_scene_change
     call load_game_video
     call reset_level
     jp music_start
+
+; Partial Fisher-Yates samples distinct difficulty ranks from the catalog.
+; The selected suffix is then sorted from hardest to easiest because the
+; campaign reads the pool from the end.
+draw_campaign:
+    ld hl,campaign_pool
+    ld b,sector_count
+    xor a
+fill_campaign_pool:
+    ld (hl),a
+    inc hl
+    inc a
+    djnz fill_campaign_pool
+
+    ld c,sector_count
+    ld b,campaign_length
+draw_sector:
+    push hl
+random_sector_index:
+    call placement_random
+    and 31
+    cp c
+    jr nc,random_sector_index
+    ld e,a
+    ld d,0
+    ld hl,campaign_pool
+    add hl,de
+    ex de,hl
+    pop hl
+    dec hl
+    ld a,(de)
+    push af
+    ld a,(hl)
+    ld (de),a
+    pop af
+    ld (hl),a
+    dec c
+    djnz draw_sector
+
+    ld b,campaign_length-1
+sort_campaign_pass:
+    push bc
+    push hl
+sort_campaign_pair:
+    ld a,(hl)
+    inc hl
+    cp (hl)
+    jr nc,sorted_pair
+    ld c,(hl)
+    ld (hl),a
+    dec hl
+    ld (hl),c
+    inc hl
+sorted_pair:
+    djnz sort_campaign_pair
+    pop hl
+    pop bc
+    djnz sort_campaign_pass
+    ret
 
 configure_difficulty:
     ld a,(difficulty)
@@ -376,8 +499,11 @@ configure_difficulty:
     ret
 
 stage_exit:
-    ld a,(sector)
-    cp sector_count-1
+    call enemies_remaining
+    ld a,hint_clear_enemies
+    jp nz,set_exit_hint
+    ld a,(campaign_step)
+    cp campaign_length-1
     ld a,2
     jr nz,exit_found
     inc a

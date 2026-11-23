@@ -334,8 +334,12 @@ unlock_door:
     ld (hl),0
     ld a,(iy+actor_arg)
     and 8
-    rrca
-    rrca
+    jr z,door_hint_ready
+    call enemies_remaining
+    ld a,hint_find_exit
+    jr z,door_hint_ready
+    ld a,hint_clear_enemies
+door_hint_ready:
     push af
     ld e,155
     call event_tone
@@ -391,15 +395,23 @@ shot_step:
     ret
 damage_enemy:
     dec (iy+actor_hp)
-    ret z
+    jr z,enemy_defeated
     ld a,(weapon)
     or a
     jr z,enemy_stagger
     dec (iy+actor_hp)
-    ret z
+    jr z,enemy_defeated
 enemy_stagger:
     ld (iy+actor_wait),4
     ret
+enemy_defeated:
+    ld a,(hint)
+    cp hint_clear_enemies
+    ret nz
+    call enemies_remaining
+    ret nz
+    ld a,hint_find_exit
+    jp set_hint
 enemy_tick:
     ld a,(iy+actor_hp)
     or a
@@ -666,6 +678,10 @@ neg_hl:
     ld h,a
     ret
 
+set_exit_hint:
+    ld hl,hint
+    cp (hl)
+    ret z
 set_hint:
     ld (hint),a
 mark_dirty:

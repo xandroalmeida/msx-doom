@@ -12,19 +12,21 @@
 
 ## English
 
-Posto Umbra is an original Doom-inspired first-person shooter for the **MSX1 with 64 KiB of RAM**. Its campaign spans three 32 × 44 tile sectors with four gates each. It features three difficulty levels, two weapons and a 32 KiB linear cartridge ROM.
+Posto Umbra is an original Doom-inspired first-person shooter for the **MSX1 with 64 KiB of RAM**. Each campaign draws 12 different sectors from a catalog of 21. Each sector has 32 × 44 tiles and four gates. It features three difficulty levels, two weapons and a 32 KiB linear cartridge ROM.
 
-### Sectors
+### Original sectors
 
 - **Depot (Depósito).** Cargo stacks and parallel corridors connect the loading dock, pump room and evacuation control room.
 - **Foundry (Fundição).** Keys in the western rooms open gates on the east side. Service corridors lead to extra supplies.
 - **Reactor (Reator).** Parallel passages and narrow galleries link three long wings from the entrance to the surface transmitter.
 
+The 18 additional sectors include dry docks, narrow service wings, industrial yards and laboratories.
+
 ### Music and title screen
 
 The pixel-art title screen shows Posto Umbra at dusk. Stars and the antenna beacon blink, and the entrance lights pulse. **Sinal de Umbra**, the original title theme, uses all three PSG tone channels and adds noise percussion to the bass line in 7/8 time. The on-screen meters follow the channels. The theme loops every 22.4 seconds, stops when you start the campaign and restarts from the first bar when you return to the title screen.
 
-Each sector has its own original track. **Ecos do Depósito**, **Forja Vermelha** and **Núcleo de Vidro** combine melody and bass in loops of about 26 seconds. Campaign music starts enabled. Press **T** or **B + right** during play or on the pause screen to toggle it. Sound effects stay active, and your choice carries across sectors and retries.
+The campaign uses three original tracks assigned by sector. **Ecos do Depósito**, **Forja Vermelha** and **Núcleo de Vidro** combine melody and bass in loops of about 26 seconds. Campaign music starts enabled. Press **T** or **B + right** during play or on the pause screen to toggle it. Sound effects stay active, and your choice carries across sectors and retries.
 
 ### How to play
 
@@ -60,11 +62,11 @@ Select **Fácil** (Easy), **Normal** or **Difícil** (Hard) on the title screen 
 
 The pistol uses one round and can hit distant targets. The pulse weapon uses two rounds and deals two points of damage at short range. Yellow ammo boxes provide eight rounds, and hearts restore up to two health points. Purple brutes can take more hits and attack from farther away.
 
-Find all four keys in each sector, open their gates and follow the green exit marker. Fight or slip past enemies to collect keys and supplies. Your starting health and ammo are restored in each new sector and on each retry. Press Space after the ending screen to return to the title.
+Find all four keys in each sector, open their gates and eliminate every enemy. The green exit clears the sector only after the last enemy is defeated. Your starting health and ammo are restored in each new sector and on each retry. Press Space after the ending screen to return to the title.
 
-A new campaign randomizes enemy, ammo, health and key positions. The game uses free tiles and keeps each key reachable before its gate. Restarting or retrying a sector reuses its layout.
+Starting a campaign from the title screen draws 12 sectors without repeats and orders them from easiest to hardest. The ranking weighs the required route, enemy health, ammunition and healing. The game also randomizes enemy, ammo, health and key positions, using free tiles and keeping each key reachable before its gate. Restarting or retrying a sector preserves both its positions and the campaign order.
 
-The 3D view takes up 256 × 184 pixels. A single HUD row shows health, ammo, your weapon, the current sector and an objective hint in a terminal-inspired pixel font. When you get hit, a heart becomes hollow, the scene flashes red and the PSG plays a short impact sound. All five hearts appear hollow on the defeat screen.
+The 3D view takes up 256 × 184 pixels. The compass at the top of the HUD has a round dial with a yellow needle that turns with your aim. The Portuguese labels use **L** for east and **O** for west. The compass stays visible when you hide the minimap. The bottom HUD row shows health, ammo, your weapon, the campaign step (S01–S12) and an objective hint. When you get hit, a heart becomes hollow, the scene flashes red and the PSG plays a short impact sound. All five hearts appear hollow on the defeat screen.
 
 ### Minimap and pause map
 
@@ -96,7 +98,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Capture paths are optional. The WAV is recorded from the emulated PSG. The suite checks the soundtrack at 50 and 60 Hz, including all three campaign tracks, their loops, the controls and playback after sound effects. It also checks title animation, cartridge boot from a subslot, the three difficulty levels, randomized placements and access to keys. Testing on physical MSX1 hardware is pending.
+Capture paths are optional. The WAV is recorded from the emulated PSG. The suite checks the soundtrack at 50 and 60 Hz, including all three campaign tracks, their loops, the controls and playback after sound effects. It also checks title animation, cartridge boot from a subslot, the three difficulty levels, randomized placements, access to keys, all 21 maps and two full 12-sector campaigns. Testing on physical MSX1 hardware is pending.
 
 ### Source files
 
@@ -112,24 +114,27 @@ Capture paths are optional. The WAV is recorded from the emulated PSG. The suite
 - [Object projection and HUD](src/objects.z80)
 - [Map and legend](src/menu.z80)
 - [Level maps and route validation](tools/levels.py)
+- [18 additional maps](tools/additional_sectors.py)
 - [Art and table generation](tools/tables.py)
 - [Automated WebMSX tests](tests/webmsx.cjs)
 
 ## Português
 
-Posto Umbra é um jogo original de tiro em primeira pessoa inspirado em Doom para **MSX1 com 64 KiB de RAM**. A campanha tem três setores de 32 × 44 células e quatro portões por setor. O jogo oferece três dificuldades e duas armas em um cartucho linear de 32 KiB.
+Posto Umbra é um jogo original de tiro em primeira pessoa inspirado em Doom para **MSX1 com 64 KiB de RAM**. Cada campanha sorteia 12 setores diferentes de um catálogo de 21. Cada setor tem 32 × 44 células e quatro portões. O jogo oferece três dificuldades e duas armas em um cartucho linear de 32 KiB.
 
-### Fases
+### Fases originais
 
 - **Depósito.** Pilhas de carga e corredores paralelos ligam a doca, a sala de bombas e o controle de evacuação.
 - **Fundição.** As chaves ficam nas salas a oeste e abrem portões no lado leste. Desvios pelos corredores de serviço dão acesso a suprimentos.
 - **Reator.** Três alas compridas, com passagens paralelas e galerias estreitas, ligam a entrada ao transmissor de superfície.
 
+As 18 fases adicionais incluem docas, alas de serviço, pátios industriais e laboratórios.
+
 ### Música e abertura
 
 A tela de título mostra o Posto Umbra ao anoitecer em pixel art. As estrelas e o farol da antena piscam, e as luzes da entrada pulsam. **Sinal de Umbra**, o tema original da abertura, usa os três canais de tom do PSG e mistura percussão de ruído ao baixo em compasso de 7/8. As barras na tela acompanham os canais. A faixa repete a cada 22,4 segundos, para ao iniciar a campanha e recomeça do primeiro compasso ao voltar ao título.
 
-Cada setor tem uma faixa própria. **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro** combinam melodia e baixo em ciclos de cerca de 26 segundos. A trilha vem ligada. **T** ou **B + direita** alternam a música na partida ou na pausa. Os efeitos sonoros continuam ativos, e a preferência vale entre setores e novas tentativas.
+A campanha usa três faixas originais, distribuídas entre os setores. **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro** combinam melodia e baixo em ciclos de cerca de 26 segundos. A trilha vem ligada. **T** ou **B + direita** alternam a música na partida ou na pausa. Os efeitos sonoros continuam ativos, e a preferência vale entre setores e novas tentativas.
 
 ### Jogar
 
@@ -165,11 +170,11 @@ Na tela de título, escolha **Fácil**, **Normal** ou **Difícil** antes de aper
 
 A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. As caixas amarelas fornecem oito cargas, e os corações recuperam até dois pontos de vida. O bruto roxo aguenta mais disparos e alcança o jogador de mais longe no ataque.
 
-Encontre as quatro chaves de cada setor, abra os portões correspondentes e siga até o sinal verde. Você pode passar pelos inimigos ou enfrentá-los para alcançar as chaves e os suprimentos. A vida e a munição iniciais são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
+Encontre as quatro chaves de cada setor, abra os portões correspondentes e elimine todos os inimigos. O sinal verde só encerra a fase depois que o último inimigo cair. O HUD mostra **MATE TODOS** se ainda houver inimigos ao abrir o último portão ou chegar à saída. A vida e a munição iniciais são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
 
-Uma nova campanha sorteia as posições de inimigos, munição, cura e chaves. O sorteio usa células livres e mantém cada chave acessível antes do portão correspondente. Ao reiniciar ou tentar de novo, o setor repete o mesmo sorteio.
+Ao iniciar uma campanha na tela de título, o jogo sorteia 12 setores sem repetição e os ordena do mais fácil ao mais difícil. A classificação leva em conta a rota obrigatória, a resistência dos inimigos, a munição e a cura. O jogo também sorteia as posições de inimigos, munição, cura e chaves, usando células livres e mantendo cada chave acessível antes do portão correspondente. Reiniciar ou tentar de novo preserva as posições do setor e a ordem da campanha.
 
-A visão 3D ocupa 256 × 184 pixels. O HUD usa uma única linha para mostrar corações, munição, arma, setor e uma dica de objetivo em fonte pixel art inspirada em terminais. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
+A visão 3D ocupa 256 × 184 pixels. A bússola no topo do HUD tem um mostrador circular com **N**, **L**, **S** e **O**. O ponteiro amarelo gira junto com a mira, mesmo com o minimapa desligado. A linha inferior mostra corações, munição, arma, posição na campanha (S01–S12) e uma dica de objetivo. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
 
 ### Minimapa e mapa de pausa
 
@@ -201,7 +206,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Os caminhos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a trilha a 50 e 60 Hz, incluindo as três faixas da campanha, seus ciclos, os atalhos e a retomada após os efeitos sonoros. Também verifica a arte animada da abertura, a inicialização em subslot, as três dificuldades, a variação de posições e o acesso às chaves. A validação em um MSX1 físico continua pendente.
+Os caminhos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifica a trilha a 50 e 60 Hz, incluindo as três faixas da campanha, seus ciclos, os atalhos e a retomada após os efeitos sonoros. Também verifica a arte animada da abertura, a inicialização em subslot, as três dificuldades, a variação de posições, o acesso às chaves, os 21 mapas e duas campanhas completas de 12 fases. A validação em um MSX1 físico continua pendente.
 
 ### Código
 
@@ -217,24 +222,27 @@ Os caminhos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifi
 - [Projeção de objetos e HUD](src/objects.z80)
 - [Mapa e legenda](src/menu.z80)
 - [Mapas das fases e validação das rotas](tools/levels.py)
+- [18 mapas adicionais](tools/additional_sectors.py)
 - [Arte e geração de tabelas](tools/tables.py)
 - [Testes automatizados no WebMSX](tests/webmsx.cjs)
 
 ## Español
 
-Posto Umbra es un juego original de disparos en primera persona inspirado en Doom para **MSX1 con 64 KiB de RAM**. La campaña tiene tres sectores de 32 × 44 casillas y cuatro portones por sector. El juego ofrece tres niveles de dificultad y dos armas en un cartucho lineal de 32 KiB.
+Posto Umbra es un juego original de disparos en primera persona inspirado en Doom para **MSX1 con 64 KiB de RAM**. Cada campaña sortea 12 sectores distintos de un catálogo de 21. Cada sector tiene 32 × 44 casillas y cuatro portones. El juego ofrece tres niveles de dificultad y dos armas en un cartucho lineal de 32 KiB.
 
-### Niveles
+### Niveles originales
 
 - **Almacén (Depósito).** Las pilas de carga y los pasillos paralelos conectan el muelle, la sala de bombas y la sala de control de evacuación.
 - **Fundición (Fundição).** Las llaves de las salas del oeste abren los portones del este. Los pasillos de servicio llevan a suministros adicionales.
 - **Reactor (Reator).** Pasajes paralelos y galerías estrechas enlazan tres alas largas entre la entrada y el transmisor de superficie.
 
+Los 18 niveles adicionales incluyen diques, alas de servicio, patios industriales y laboratorios.
+
 ### Música y pantalla de título
 
 La pantalla de título muestra el puesto al anochecer en pixel art. Las estrellas y la baliza de la antena parpadean, y las luces de la entrada pulsan. **Sinal de Umbra**, el tema original de inicio, usa los tres canales de tono del PSG y combina percusión de ruido con el bajo en un compás de 7/8. Las barras en pantalla siguen la actividad de los canales. El tema se repite cada 22,4 segundos, se detiene al comenzar la campaña y vuelve al primer compás al regresar al título.
 
-Cada sector tiene su propio tema. **Ecos do Depósito**, **Forja Vermelha** y **Núcleo de Vidro** combinan melodía y bajo en bucles de unos 26 segundos. La música está activada al inicio. Pulsa **T** o **B + derecha** durante la partida o en pausa para activarla o desactivarla. Los efectos sonoros siguen activos, y tu elección se conserva entre sectores y reintentos.
+La campaña usa tres temas originales asignados a los sectores. **Ecos do Depósito**, **Forja Vermelha** y **Núcleo de Vidro** combinan melodía y bajo en bucles de unos 26 segundos. La música está activada al inicio. Pulsa **T** o **B + derecha** durante la partida o en pausa para activarla o desactivarla. Los efectos sonoros siguen activos, y tu elección se conserva entre sectores y reintentos.
 
 ### Cómo jugar
 
@@ -270,11 +278,11 @@ En la pantalla de título, elige **Fácil**, **Normal** o **Difícil** antes de 
 
 La pistola consume una carga y alcanza objetivos distantes. El arma de pulso consume dos cargas e inflige dos puntos de daño a corta distancia. Las cajas amarillas aportan ocho cargas y los corazones recuperan hasta dos puntos de vida. El bruto morado resiste más disparos y ataca desde más lejos.
 
-Encuentra las cuatro llaves de cada sector, abre sus portones y sigue la señal verde hasta la salida. Puedes esquivar o combatir a los enemigos para llegar a las llaves y los suministros. La vida y la munición se reponen a sus valores iniciales en cada sector y en cada reintento. Pulsa Espacio tras la pantalla final para volver al título.
+Encuentra las cuatro llaves de cada sector, abre sus portones y elimina a todos los enemigos. La salida verde solo permite completar el nivel después de derrotar al último enemigo. La vida y la munición se reponen a sus valores iniciales en cada sector y en cada reintento. Pulsa Espacio tras la pantalla final para volver al título.
 
-Cada nueva campaña distribuye al azar los enemigos, la munición, la curación y las llaves. El juego utiliza casillas libres y mantiene cada llave accesible antes del portón correspondiente. Al reiniciar o reintentar un sector, se conserva la misma distribución.
+Al iniciar una campaña en la pantalla de título, el juego sortea 12 sectores sin repetirlos y los ordena del más fácil al más difícil. La clasificación tiene en cuenta la ruta obligatoria, la resistencia de los enemigos, la munición y la curación. El juego también distribuye al azar los enemigos, la munición, la curación y las llaves en casillas libres, manteniendo cada llave accesible antes de su portón. Reiniciar o reintentar un sector conserva sus posiciones y el orden de la campaña.
 
-La vista 3D ocupa 256 × 184 píxeles. El HUD muestra en una sola línea los corazones, la munición, el arma, el sector y una pista del objetivo con una tipografía pixelada de estilo terminal. Al recibir daño, un corazón se vacía, la escena parpadea en rojo y el PSG reproduce un sonido breve de impacto. En la pantalla de derrota aparecen los cinco corazones vacíos.
+La vista 3D ocupa 256 × 184 píxeles. La brújula superior tiene una esfera circular con una aguja amarilla que gira con la mira. Las etiquetas en portugués usan **L** para el este y **O** para el oeste. La brújula sigue visible al ocultar el minimapa. La fila inferior muestra los corazones, la munición, el arma, la posición en la campaña (S01–S12) y una pista del objetivo. Al recibir daño, un corazón se vacía, la escena parpadea en rojo y el PSG reproduce un sonido breve de impacto. En la pantalla de derrota aparecen los cinco corazones vacíos.
 
 ### Minimapa y mapa de pausa
 
@@ -306,7 +314,7 @@ curl -fL https://raw.githubusercontent.com/ppeccin/WebMSX/master/release/stable/
 node tests/webmsx.cjs build/wmsx.js build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
 ```
 
-Las rutas de captura son opcionales. El WAV se graba a partir del PSG emulado. Las pruebas verifican la música a 50 y 60 Hz, incluidas las tres pistas de campaña, sus bucles, los controles y la reanudación tras los efectos sonoros. También comprueban la animación del título, el arranque desde una subranura, los tres niveles de dificultad, la distribución aleatoria y el acceso a las llaves. La validación en un MSX1 físico sigue pendiente.
+Las rutas de captura son opcionales. El WAV se graba a partir del PSG emulado. Las pruebas verifican la música a 50 y 60 Hz, incluidas las tres pistas de campaña, sus bucles, los controles y la reanudación tras los efectos sonoros. También comprueban la animación del título, el arranque desde una subranura, los tres niveles de dificultad, la distribución aleatoria, el acceso a las llaves, los 21 mapas y dos campañas completas de 12 niveles. La validación en un MSX1 físico sigue pendiente.
 
 ### Código
 
@@ -322,5 +330,6 @@ Las rutas de captura son opcionales. El WAV se graba a partir del PSG emulado. L
 - [Proyección de objetos y HUD](src/objects.z80)
 - [Mapa y leyenda](src/menu.z80)
 - [Mapas de los niveles y validación de rutas](tools/levels.py)
+- [18 mapas adicionales](tools/additional_sectors.py)
 - [Gráficos y generación de tablas](tools/tables.py)
 - [Pruebas automatizadas en WebMSX](tests/webmsx.cjs)

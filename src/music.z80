@@ -5,10 +5,11 @@ music_running: equ &f152
 music_last: equ &f153
 music_phase: equ &f154
 music_interval: equ &f155
-music_loop: equ &f156
-music_next: equ &f158
+music_loop: equ &f156              ; start of the track's bar order
+music_next: equ &f158              ; next frame in the current bar
 music_voice_b: equ &f15a
 music_voice_c: equ &f15c
+music_order: equ &f19c             ; next bar pointer in the track order
 
 music_reset:
     ld a,(music_running)
@@ -17,7 +18,7 @@ music_reset:
 music_start:
     ld a,1
     ld (music_running),a
-    ld a,(sector)
+    ld a,(sector_track)
     ld e,a
     add a,a
     add a,e                       ; each track has a pointer and a tempo byte
@@ -32,13 +33,13 @@ music_start:
     ld a,(hl)
     ld (music_interval),a
     ld (music_loop),de
-    ld (music_next),de
+    ld (music_order),de
     ld a,(JIFFY)
     ld (music_last),a
     xor a
     ld (music_phase),a
     call gameplay_mixer
-    jp music_read_frame
+    jr music_next_bar
 
 music_tick:
     ld a,(outcome)
@@ -75,21 +76,50 @@ music_next_tick:
 
 music_read_frame:
     ld hl,(music_next)
-    inc hl
     ld a,(hl)
-    inc a                          ; FFFFh ends the track
-    dec hl
-    jr nz,music_read_voices
+    cp &ff                         ; FFh ends a bar
+    jr nz,music_unpack_frame
+music_next_bar:
+    ld hl,(music_order)
+music_read_order:
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    inc hl
+    ld a,d
+    or e                           ; a null pointer loops the track
+    jr nz,music_bar_ready
     ld hl,(music_loop)
-music_read_voices:
-    ld de,music_voice_b
-    ld bc,4
-    ldir
+    jr music_read_order
+music_bar_ready:
+    ld (music_order),hl
+    ex de,hl
+    ld a,(hl)
+music_unpack_frame:
+    inc hl
+    ld c,(hl)
+    inc hl
     ld (music_next),hl
+    call music_unpack_word
+    ld (music_voice_b),de
+    ld a,c
+    call music_unpack_word
+    ld (music_voice_c),de
 
 music_mix:
     call music_restore_b
     jp music_restore_c
+
+music_unpack_word:
+    ld l,a
+    ld h,0
+    add hl,hl
+    ld de,game_music_words
+    add hl,de
+    ld e,(hl)
+    inc hl
+    ld d,(hl)
+    ret
 
 music_restore_b:
     ld a,(effect_timer)

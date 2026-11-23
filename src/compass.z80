@@ -1,0 +1,37 @@
+; The dial is painted into the name table. Its needle is one hardware sprite.
+compass_sprite_vram: equ &1b00+compass_sprite-sprites
+compass_first_sprite_pattern: equ (sprite_patterns_end-sprite_patterns)/8
+
+draw_compass_face:
+    ld hl,compass_face
+    ld de,frame+compass_offset
+    ld a,compass_width
+draw_compass_row:
+    ld bc,compass_width
+    ldir
+    ex de,hl
+    ld bc,32-compass_width
+    add hl,bc
+    ex de,hl
+    dec a
+    jr nz,draw_compass_row
+    ret
+
+draw_compass_needle:
+    ; Round to one of 32 bearings and wrap across north.
+    ld a,(heading)
+    inc a
+    and &3e
+    ld e,a
+    ld d,0
+    push af
+    ld hl,compass_needle_positions
+    add hl,de
+    ld de,compass_sprite_vram
+    ld bc,2
+    call LDIRVM
+    pop af
+    rrca
+    add a,compass_first_sprite_pattern
+    ld hl,compass_sprite_vram+2
+    jp WRTVRM

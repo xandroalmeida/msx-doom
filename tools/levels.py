@@ -1,9 +1,12 @@
 """Original campaign layouts. Coordinates are zero-based, with north at the top."""
 
 from collections import deque
-from itertools import groupby
+
+from additional_sectors import ADDITIONAL_SECTORS
 
 WIDTH, HEIGHT = 32, 44
+CAMPAIGN_LENGTH = 12
+TERRAIN_BLOCK_SIZE = 3
 DOORS = "1234"
 KEYS = "abcd"
 # M/B are always present, m is added on Normal, and t only on Difícil.
@@ -140,9 +143,10 @@ REACTOR = layout(
 )
 
 SECTORS = (
-    ("Deposito", 8, DEPOT),
-    ("Fundicao", 9, FOUNDRY),
-    ("Reator", 10, REACTOR),
+    ("Deposito", 8, 0, DEPOT),
+    ("Fundicao", 9, 1, FOUNDRY),
+    ("Reator", 10, 2, REACTOR),
+    *ADDITIONAL_SECTORS,
 )
 
 
@@ -186,21 +190,36 @@ def validate(name, rows):
     return minimum
 
 
+def pack_terrain(rows, patterns):
+    # The outer stone wall is implicit. Each interior block references
+    # three bytes in the shared dictionary, one packed byte per row.
+    materials = {"#": 1, "+": 2, **dict.fromkeys(DOORS, 3)}
+    size = TERRAIN_BLOCK_SIZE
+    packed = []
+    for y in range(1, HEIGHT - 1, size):
+        for x in range(1, WIDTH - 1, size):
+            pattern = tuple(
+                sum(materials.get(tile, 0) << (2 * column)
+                    for column, tile in enumerate(row[x:x + size]))
+                for row in rows[y:y + size]
+            )
+            packed.append(patterns.setdefault(pattern, len(patterns)))
+    return packed
+
+
 def sector_data(data):
-    maps, records = [], []
-    for index, (name, initial_ammo, rows) in enumerate(SECTORS):
-        validate(name, rows)
+    if not CAMPAIGN_LENGTH <= len(SECTORS) <= 32:
+        raise ValueError("Catálogo incompatível com o sorteio da campanha.")
+    maps, records, patterns = [], [], {}
+    sectors_by_difficulty = {}
+    geometries = set()
+    for index, (name, initial_ammo, track, rows) in enumerate(SECTORS):
+        route_length = validate(name, rows)
+        brute_hp = 4 if rows is REACTOR else 3
         enemy_groups = ([], [], [])
-        props, packed = [], []
+        props = []
         start = None
         world = "".join(rows)
-        terrain = {"#": 1, "+": 2, **dict.fromkeys(DOORS, 3)}
-        for material, run in groupby(terrain.get(mark, 0) for mark in world):
-            length = len(list(run))
-            while length:
-                chunk = min(length, 64)
-                packed.append(((chunk - 1) << 2) | material)
-                length -= chunk
         for cell, mark in enumerate(world):
             x, y = cell % WIDTH, cell // WIDTH
             if mark == "P":
@@ -208,7 +227,7 @@ def sector_data(data):
             elif mark in "MBmt":
                 group = {"m": 1, "t": 2}.get(mark, 0)
                 brute = mark == "B"
-                enemy_groups[group].append((x, y, int(brute), 3 + (index == 2) if brute else 2))
+                enemy_groups[group].append((x, y, int(brute), brute_hp if brute else 2))
             elif mark == "A":
                 props.append((x, y, 0, 8))
             elif mark == "H":
@@ -224,17 +243,42 @@ def sector_data(data):
         enemies = [enemy for group in enemy_groups for enemy in group]
         if len(enemies) > 16 or not 1 <= len(props) <= 17:
             raise ValueError(f"Objetos demais em {name}.")
-        if initial_ammo + sum(prop[3] for prop in props if prop[2] == 0) < sum(enemy[3] for enemy in enemies):
+        ammo_to_collect = sum(amount for _, _, kind, amount in props if kind == 0)
+        healing = sum(amount for _, _, kind, amount in props if kind == 1)
+        shots_needed = sum(enemy[3] for enemy in enemies)
+        if initial_ammo + ammo_to_collect < shots_needed:
             raise ValueError(f"Munição insuficiente em {name}.")
+
+        # Start from the required route length, then weigh combat and supplies.
+        # Ammo on the floor helps less than ammo already in the weapon.
+        difficulty = route_length + 12 * (shots_needed - initial_ammo) - 3 * ammo_to_collect - 10 * healing
+        if difficulty in sectors_by_difficulty:
+            other = SECTORS[sectors_by_difficulty[difficulty]][0]
+            raise ValueError(f"Dificuldade empatada em {name} e {other}.")
+        sectors_by_difficulty[difficulty] = index
+
         map_label = f"sector_map_{index}"
+        packed = pack_terrain(rows, patterns)
+        geometry = tuple(packed)
+        if geometry in geometries:
+            raise ValueError(f"Geometria duplicada em {name}.")
+        geometries.add(geometry)
         maps.append(data(map_label, packed))
         records.append(
             f"sector_{index}:\n    dw {map_label}\n    db "
-            + ",".join(map(str, (*start, initial_ammo, len(enemies))))
+            + ",".join(map(str, (track, *start, initial_ammo, len(enemies))))
             + "\n" + "\n".join("    db " + ",".join(map(str, enemy)) for enemy in enemies)
             + f"\n    db {len(props)}\n"
             + "\n".join("    db " + ",".join(map(str, prop)) for prop in props)
         )
+    if len(patterns) > 256:
+        raise ValueError("Dicionário de terreno excede 256 blocos.")
+    dictionary = data("terrain_blocks", (row for block in patterns for row in block))
     pointers = data("sector_records", (f"sector_{i}" for i in range(len(SECTORS))), "dw")
+    difficulty_order = data("sector_difficulty_order", (
+        sectors_by_difficulty[score] for score in sorted(sectors_by_difficulty)
+    ))
     return "\n".join((f"map_width: equ {WIDTH}", f"map_height: equ {HEIGHT}",
-                      f"sector_count: equ {len(SECTORS)}", pointers, *records, *maps))
+                      f"sector_count: equ {len(SECTORS)}", f"campaign_length: equ {CAMPAIGN_LENGTH}",
+                      f"terrain_block_size: equ {TERRAIN_BLOCK_SIZE}",
+                      pointers, difficulty_order, *records, dictionary, *maps))

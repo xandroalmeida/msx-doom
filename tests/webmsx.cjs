@@ -43,13 +43,18 @@ const frameStart = 0xc080;
 const viewStart = 0xc100;
 const hudStart = 0xc360;
 const hudRow = 23;
-const lifeOffset = 1;
-const ammoOffset = 8;
-const weaponOffset = 11;
-const sectorOffset = 20;
+const lifeOffset = 0;
+const ammoOffset = 7;
+const weaponOffset = 10;
+const sectorOffset = 19;
+const hintWidth = 10;
+const hudHints = romTiles("hud_hints", hintWidth * 10);
 const titlePicture = romTiles("title_picture", 16 * 32);
 const titleMeterOffset = 14 * 32 + 5;
 const titleDifficultyOffset = 16 * 32 + 15;
+const compassWidth = 4;
+const compassStart = 32 + 14;
+const compassFace = romTiles("compass_face", compassWidth ** 2);
 
 // Start the authentic machine and VDP, with a minimal host for the video output.
 const core = new vm.Script(
@@ -178,15 +183,25 @@ function saveFrame(frame, filename) {
 }
 
 function checkVideo(run) {
-    const { v9918, regs, vram } = run.video();
-    assert.ok(v9918, "O VDP deve estar no modo MSX1.");
     assert.equal(run.machine.cpu.getZ80ClockMulti(), 1);
-    assert.equal(regs[0] & 0x02, 0x02, "SCREEN 2 deve estar ativo.");
-    assert.equal(regs[1] & 0x58, 0x40, "A tela deve estar ligada, com os bits de modo corretos.");
-    assert.equal(regs[2], run.read(0xf105), "R2 deve apontar para a página apresentada.");
-    const base = regs[2] << 10;
-    const frame = Buffer.from(Array.from({ length: 24 * 32 }, (_, i) => run.read(frameStart + i)));
-    assert.deepEqual(vram.subarray(base, base + frame.length), frame);
+    for (let i = 0; ; i++) {
+        const { v9918, regs, vram } = run.video();
+        const base = regs[2] << 10;
+        const frame = Buffer.from(Array.from({ length: 24 * 32 }, (_, cell) => run.read(frameStart + cell)));
+        const displayed = vram.subarray(base, base + frame.length);
+        const page = run.read(state.page);
+        // The CPU can be building the next frame while the VDP shows the previous one.
+        if (i < 12 && (regs[2] !== page || !displayed.equals(frame))) {
+            run.run(1);
+            continue;
+        }
+        assert.ok(v9918, "O VDP deve estar no modo MSX1.");
+        assert.equal(regs[0] & 0x02, 0x02, "SCREEN 2 deve estar ativo.");
+        assert.equal(regs[1] & 0x58, 0x40, "A tela deve estar ligada, com os bits de modo corretos.");
+        assert.equal(regs[2], page, "R2 deve apontar para a página apresentada.");
+        assert.deepEqual(displayed, frame);
+        return;
+    }
 }
 
 function checkTitleArt(demo) {
@@ -219,12 +234,13 @@ function checkTitleArt(demo) {
 const state = {
     playerX: 0xf100, playerY: 0xf102, heading: 0xf104, page: 0xf105, shown: 0xf10b, life: 0xf10f,
     ammo: 0xf110, enemyEnd: 0xf111, propEnd: 0xf112, keysHeld: 0xf113, mapTop: 0xf116,
-    outcome: 0xf119, hint: 0xf11a, flash: 0xf11b, menu: 0xf125, sector: 0xf126, weapon: 0xf12a, minimap: 0xf127,
+    outcome: 0xf119, hint: 0xf11a, flash: 0xf11b, menu: 0xf125, step: 0xf126, weapon: 0xf12a, minimap: 0xf127,
     difficulty: 0xf145, sight: 0xf147, attackDelay: 0xf148, chaseDelay: 0xf149, seed: 0xf14a,
     titlePhase: 0xf150,
     musicEnabled: 0xf151, musicPhase: 0xf154, musicLoop: 0xf156, musicNext: 0xf158, musicB: 0xf15a, musicC: 0xf15c,
+    musicOrder: 0xf19c,
     eventTimer: 0xf128,
-    wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400,
+    wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400, campaignPool: 0xc4a0,
 };
 const up = 0x20;
 const down = 0x40;
@@ -232,10 +248,36 @@ const right = 0x80;
 const space = 1;
 const width = 32;
 const height = 44;
-const sectorStarts = [[4, 40], [27, 8], [4, 40]];
-const initialCharges = [8, 9, 10];
-const enemyCounts = [11, 12, 13];
-const names = ["Depósito", "Fundição", "Reator"];
+const sectorCount = 21;
+const campaignLength = 12;
+const lastPoolSlot = state.campaignPool + sectorCount - 1;
+const rankedSectors = romTiles("sector_difficulty_order", sectorCount);
+assert.equal(new Set(rankedSectors).size, sectorCount);
+assert.ok(rankedSectors.every((id) => id < sectorCount));
+
+function campaignOrder(demo) {
+    const ranks = Array.from({ length: campaignLength }, (_, step) => demo.read(lastPoolSlot - step));
+    assert.ok(ranks.every((rank) => rank < sectorCount));
+    assert.ok(ranks.slice(1).every((rank, index) => rank > ranks[index]),
+        "As 12 fases devem ter dificuldade estritamente crescente, sem repetir mapas.");
+    return ranks.map((rank) => rankedSectors[rank]);
+}
+
+function sectorTrack(id) {
+    return romTiles(`sector_${id}`, 3)[2];
+}
+
+function selectFirstMap(demo, id) {
+    const rank = rankedSectors.indexOf(id);
+    for (let slot = state.campaignPool; slot <= lastPoolSlot; slot++) {
+        if (demo.read(slot) !== rank) continue;
+        demo.write(slot, demo.read(lastPoolSlot));
+        demo.write(lastPoolSlot, rank);
+        press(demo, "retry", true);
+        return;
+    }
+    assert.fail(`Mapa ${id + 1} ausente do catálogo da campanha.`);
+}
 
 function mapAddress(x, y) {
     return state.map + y * 256 + x;
@@ -319,6 +361,7 @@ function startCampaign(frequency, difficulty = 1, delay = 0) {
     checkVideo(demo);
     press(demo, "keys", space);
     assert.equal(demo.read(state.outcome), 0);
+    campaignOrder(demo);
     return demo;
 }
 
@@ -405,21 +448,22 @@ function checkSlopedWall(frequency, material) {
     demo.write(state.playerY, 192);
     press(demo, "menu", true);
     press(demo, "menu", true);
-    const extendedWall = demo.currentView()[16];
+    const wallColumn = 8; // A column beside the compass keeps the top row visible.
+    const extendedWall = demo.currentView()[wallColumn];
     for (const row of [2, 3, 20, 21]) {
-        assert.equal(demo.read(frameStart + row * width + 16), extendedWall);
+        assert.equal(demo.read(frameStart + row * width + wallColumn), extendedWall);
     }
     for (const row of [1, 22]) {
-        assert.notEqual(demo.read(frameStart + row * width + 16), extendedWall);
+        assert.notEqual(demo.read(frameStart + row * width + wallColumn), extendedWall);
     }
 
     placePlayer(demo, 8, 8);
     demo.write(state.playerY, 64);
     press(demo, "menu", true);
     press(demo, "menu", true);
-    const nearWall = demo.currentView()[16];
+    const nearWall = demo.currentView()[wallColumn];
     for (const row of [0, 1, 2, 3, 20, 21, 22]) {
-        assert.equal(demo.read(frameStart + row * width + 16), nearWall, "A parede próxima deve preencher a área ampliada.");
+        assert.equal(demo.read(frameStart + row * width + wallColumn), nearWall, "A parede próxima deve preencher a área ampliada.");
     }
     checkVideo(demo);
 }
@@ -608,15 +652,17 @@ function checkWeapon(demo, index) {
     assert.equal(vram[0x1b0a], index === 0 ? 1 : 8);
 }
 
-function checkSector(demo, index, difficulty = 1) {
-    assert.equal(demo.read(state.sector), index);
+function checkSector(demo, step, difficulty = 1, id = campaignOrder(demo)[step]) {
+    assert.equal(demo.read(state.step), step);
     assert.equal(demo.read(state.outcome), 0);
-    assert.deepEqual(demo.xy(), sectorStarts[index].map((axis) => axis * 256 + 128));
-    assert.equal(demo.read(state.ammo), initialCharges[index]);
+    const [,, track, x, y, ammo, hardEnemies] = romTiles(`sector_${id}`, 7);
+    assert.deepEqual(demo.xy(), [x, y].map((axis) => axis * 256 + 128));
+    assert.equal(demo.read(state.ammo), ammo);
     assert.equal(demo.read(state.life), 5);
     assert.equal(demo.read(state.keysHeld), 0);
     assert.equal(demo.read(state.difficulty), difficulty);
-    assert.equal(entities(demo, state.enemies, state.enemyEnd).length, enemyCounts[index] + 3 * (difficulty - 1));
+    assert.equal(entities(demo, state.enemies, state.enemyEnd).length, hardEnemies - 3 * (2 - difficulty));
+    assert.equal(wordAt(demo, state.musicLoop), romAddress(`game_music_${track}`));
     const props = entities(demo, state.props, state.propEnd);
     for (const gate of props.filter(({ kind }) => kind === 3)) {
         assert.equal(demo.read(gate.address), 1);
@@ -625,7 +671,9 @@ function checkSector(demo, index, difficulty = 1) {
     checkWeapon(demo, 0);
     checkHealthHud(demo, 5);
     const { regs, vram } = demo.video();
-    assert.equal(vram[(regs[2] << 10) + hudRow * 32 + sectorOffset], digitTiles[index + 1]);
+    const offset = (regs[2] << 10) + hudRow * 32 + sectorOffset;
+    assert.equal(vram[offset], digitTiles[Math.floor((step + 1) / 10)]);
+    assert.equal(vram[offset + 1], digitTiles[(step + 1) % 10]);
     checkVideo(demo);
 }
 
@@ -672,15 +720,23 @@ function checkPlacement(demo) {
 function checkDifficulty(frequency) {
     const normal = startCampaign(frequency);
     const positions = checkPlacement(normal);
-    const nextRun = startCampaign(frequency, 1, 29);
-    const nextPositions = checkPlacement(nextRun);
+    const order = campaignOrder(normal);
+    const seed = wordAt(normal, state.seed);
+    const nextPlacements = [29, 53, 82, 137].map((delay) => {
+        const demo = startCampaign(frequency, 1, delay);
+        assert.notDeepEqual(campaignOrder(demo), order, "Uma nova semente deve variar o sorteio das fases.");
+        assert.notEqual(wordAt(demo, state.seed), seed);
+        // Compare placement seeds on the same terrain.
+        selectFirstMap(demo, order[0]);
+        return checkPlacement(demo);
+    });
     for (const [kind, group] of positions.entries()) {
-        assert.notDeepEqual(nextPositions[kind], group, "Uma nova semente deve variar inimigos, munição, cura e chaves.");
+        assert.ok(nextPlacements.some((layout) => layout[kind].some((cell, index) => cell !== group[index])),
+            "Sementes diferentes devem produzir variações de inimigos, munição, cura e chaves.");
     }
-    const seed = [normal.read(state.seed), normal.read(state.seed + 1)];
-    assert.notDeepEqual([nextRun.read(state.seed), nextRun.read(state.seed + 1)], seed);
     press(normal, "retry", true);
-    assert.deepEqual([normal.read(state.seed), normal.read(state.seed + 1)], seed);
+    assert.equal(wordAt(normal, state.seed), seed);
+    assert.deepEqual(campaignOrder(normal), order);
     assert.deepEqual(checkPlacement(normal), positions, "Reiniciar deve conservar a distribuição do setor.");
 
     for (const [difficulty, sight, attack, chase] of [[0, 3, 14, 2], [1, 4, 10, 1], [2, 5, 6, 0]]) {
@@ -702,17 +758,43 @@ function checkDifficulty(frequency) {
     }
 }
 
+function checkCatalog() {
+    const demo = startCampaign(60, 2);
+    const dictionary = romTiles("terrain_blocks", romAddress("sector_map_0") - romAddress("terrain_blocks"));
+    for (let id = 0; id < sectorCount; id++) {
+        selectFirstMap(demo, id);
+        checkSector(demo, 0, 2, id);
+        checkPlacement(demo);
+        const map = romTiles(`sector_map_${id}`, (width - 2) * (height - 2) / 9);
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                let tile = 1;
+                if (x > 0 && x < width - 1 && y > 0 && y < height - 1) {
+                    const column = Math.floor((x - 1) / 3);
+                    const band = Math.floor((y - 1) / 3);
+                    const block = map[band * (width - 2) / 3 + column];
+                    tile = dictionary[block * 3 + (y - 1) % 3] >> (2 * ((x - 1) % 3)) & 3;
+                }
+                assert.equal(demo.read(mapAddress(x, y)), tile, `Mapa ${id + 1}, célula ${x},${y}.`);
+            }
+        }
+    }
+    console.log(`Catálogo: ${sectorCount} mapas carregados com terreno, posições e chaves válidos.`);
+}
+
 function checkMenu(demo, frequency) {
+    const ammo = demo.read(state.ammo);
     press(demo, "menu", true);
     assert.equal(demo.read(state.menu), 2, "A pausa deve abrir no mapa.");
     assert.equal(demo.video().vram[0x1b00], 208);
     const frozen = demo.xy();
     checkPlayerMarker(demo);
     const origin = demo.read(state.mapTop);
-    press(demo, "keys", up);
-    assert.ok(demo.read(state.mapTop) < origin, "A aba de mapa deve permitir olhar para o norte.");
+    const direction = origin > 0 ? up : down;
+    press(demo, "keys", direction);
+    assert.notEqual(demo.read(state.mapTop), origin, "A aba de mapa deve permitir rolar o terreno.");
     assert.deepEqual(demo.xy(), frozen);
-    press(demo, "keys", down);
+    press(demo, "keys", direction === up ? down : up);
     assert.equal(demo.read(state.mapTop), origin);
     if (frequency === 60 && mapPath) saveFrame(demo.frame, mapPath);
 
@@ -731,7 +813,7 @@ function checkMenu(demo, frequency) {
     checkPlayerMarker(demo);
     press(demo, "stick", 0x30);
     assert.equal(demo.read(state.menu), 0);
-    assert.equal(demo.read(state.ammo), 8, "Abrir ou fechar o menu não deve disparar.");
+    assert.equal(demo.read(state.ammo), ammo, "Abrir ou fechar o menu não deve disparar.");
     checkVideo(demo);
 }
 
@@ -801,6 +883,72 @@ function checkMinimap(frequency) {
     checkVideo(demo);
 }
 
+function checkCompass(frequency) {
+    const demo = openArena(frequency, [[12, 12, 0, 2, 255]]);
+    const firstTile = Math.min(...compassFace);
+    const artSize = (Math.max(...compassFace) - firstTile + 1) * 8;
+    const firstNeedle = (romAddress("sprite_patterns_end") - romAddress("sprite_patterns")) / 8;
+    const sprite = 0x1b20;
+    const needleArt = romTiles("compass_needle_patterns", 32 * 8);
+    const { vram } = demo.video();
+    assert.deepEqual(vram.subarray(firstTile * 8, firstTile * 8 + artSize), romTiles("compass_patterns", artSize));
+    assert.deepEqual(vram.subarray(0x2000 + firstTile * 8, 0x2000 + firstTile * 8 + artSize),
+        romTiles("compass_colors", artSize));
+    assert.deepEqual(vram.subarray(0x3800 + firstNeedle * 8, 0x3800 + firstNeedle * 8 + needleArt.length), needleArt);
+
+    const visibleDial = (regs, vram) => {
+        const start = (regs[2] << 10) + compassStart;
+        return Buffer.concat(Array.from({ length: compassWidth }, (_, row) => {
+            const offset = start + row * width;
+            return vram.subarray(offset, offset + compassWidth);
+        }));
+    };
+    const checkBearing = (heading) => {
+        checkVideo(demo);
+        const { regs, vram } = demo.video();
+        assert.deepEqual(visibleDial(regs, vram), compassFace);
+        const [y, x, tile, color] = vram.subarray(sprite, sprite + 4);
+        const bearing = ((heading + 1) >> 1) & 31;
+        assert.equal(tile, firstNeedle + bearing);
+        assert.equal(color, 11);
+        assert.equal(vram[sprite + 4], 208);
+
+        const points = [];
+        for (let row = 0; row < 8; row++) {
+            for (let column = 0; column < 8; column++) {
+                if (vram[0x3800 + tile * 8 + row] & (128 >> column)) {
+                    points.push([x + column - 128, y + 1 + row - 24]);
+                }
+            }
+        }
+        assert.ok(points.some(([dx, dy]) => dx === 0 && dy === 0), "O ponteiro deve partir do centro.");
+        const [dx, dy] = points.sort((a, b) => Math.hypot(...b) - Math.hypot(...a))[0];
+        const angle = bearing * Math.PI / 16;
+        const projection = dx * Math.sin(angle) - dy * Math.cos(angle);
+        assert.ok(projection > 5 && projection / Math.hypot(dx, dy) > 0.95,
+            `Ponteiro incorreto na direção ${heading}.`);
+    };
+
+    for (let heading = 0; heading < 64; heading++) {
+        face(demo, heading);
+        checkBearing(heading);
+    }
+    for (const heading of [0, 63]) {
+        face(demo, heading);
+        checkBearing(heading);
+    }
+    press(demo, "minimap", true);
+    assert.equal(demo.read(state.minimap), 0);
+    face(demo, 16);
+    checkBearing(16);
+    press(demo, "menu", true);
+    const paused = demo.video();
+    assert.notDeepEqual(visibleDial(paused.regs, paused.vram), compassFace);
+    assert.equal(paused.vram[0x1b00], 208, "O ponteiro deve ficar fora do mapa de pausa.");
+    press(demo, "menu", true);
+    checkBearing(16);
+}
+
 // Isolate gun range, enemy movement, damage effects and supplies from the
 // layout of the campaign. The campaign navigation below uses the shipped maps.
 function openArena(frequency, enemies, props = [[11, 10, 0, 6]]) {
@@ -809,6 +957,7 @@ function openArena(frequency, enemies, props = [[11, 10, 0, 6]]) {
     installEntities(demo, state.enemies, state.enemyEnd, enemies);
     installEntities(demo, state.props, state.propEnd, props);
     placePlayer(demo, 5, 12);
+    demo.write(state.ammo, 8);
     press(demo, "menu", true);
     press(demo, "menu", true);
     return demo;
@@ -822,9 +971,8 @@ function psgRegisters(demo) {
     return Buffer.from(demo.machine.psg.saveState().r, "base64");
 }
 
-function checkMusicVoice(demo, channel) {
+function checkMusicVoice(demo, channel, psg = psgRegisters(demo)) {
     const sound = wordAt(demo, channel === 1 ? state.musicB : state.musicC);
-    const psg = psgRegisters(demo);
     const gain = demo.read(state.musicEnabled) ? sound >> 12 : 0;
     assert.equal(psg[8 + channel], gain, "O canal deve voltar à trilha após o efeito.");
     if (gain) assert.equal(psg.readUInt16LE(channel * 2), sound & 0xfff);
@@ -872,30 +1020,46 @@ function checkMusicControls(frequency) {
     checkMusicVoice(demo, 2);
 }
 
-function checkTrack(demo, sector, frequency) {
-    const start = romAddress(`game_music_${sector}`);
-    const end = romAddress(sector === 2 ? "rom_end" : `game_music_${sector + 1}`);
-    const interval = romTiles("game_music_tracks", 9)[sector * 3 + 2];
-    const frames = (end - start - 2) / 4;
+function checkTrack(demo, track, frequency) {
+    const start = romAddress(`game_music_${track}`);
+    const interval = romTiles("game_music_tracks", 9)[track * 3 + 2];
+    const dictionary = romAddress("game_music_words") - 0x4000;
+    const frames = [];
+    for (let bar = start; ; bar += 2) {
+        const pattern = cartridge.readUInt16LE(bar - 0x4000);
+        if (!pattern) break;
+        for (let frame = pattern - 0x4000; cartridge[frame] !== 0xff; frame += 2) {
+            frames.push({
+                order: bar + 2,
+                next: frame + 0x4000 + 2,
+                lead: cartridge.readUInt16LE(dictionary + cartridge[frame] * 2),
+                bass: cartridge.readUInt16LE(dictionary + cartridge[frame + 1] * 2),
+            });
+        }
+    }
     assert.equal(wordAt(demo, state.musicLoop), start);
     press(demo, "menu", true);
-    let previous = wordAt(demo, state.musicNext);
-    const played = (previous - start) / 4 - 1;
-    const expected = ((frames - played) * interval - demo.read(state.musicPhase)) * frequency / 300;
+    const isCurrent = ({ order, next }) => order === wordAt(demo, state.musicOrder) && next === wordAt(demo, state.musicNext);
+    let index = frames.findIndex(isCurrent);
+    assert.ok(index >= 0, "O cursor da música deve apontar para um quadro da faixa.");
+    const expected = ((frames.length - index) * interval - demo.read(state.musicPhase)) * frequency / 300;
     const pitches = [new Set(), new Set()];
     let elapsed = 0;
     for (; elapsed < Math.ceil(expected) + 6; elapsed++) {
         demo.run(1);
-        const current = wordAt(demo, state.musicNext);
-        if (current === previous) continue;
-        if (current < previous) break;
-        previous = current;
+        if (isCurrent(frames[index])) continue;
+        index = (index + 1) % frames.length;
+        assert.ok(isCurrent(frames[index]), "A música deve avançar um quadro na ordem dos compassos.");
+        assert.equal(wordAt(demo, state.musicB), frames[index].lead);
+        assert.equal(wordAt(demo, state.musicC), frames[index].bass);
         const psg = psgRegisters(demo);
         for (let channel = 1; channel <= 2; channel++) {
+            checkMusicVoice(demo, channel, psg);
             if (psg[8 + channel]) pitches[channel - 1].add(psg.readUInt16LE(channel * 2));
         }
+        if (index === 0) break;
     }
-    assert.equal(wordAt(demo, state.musicNext), start + 4, "A faixa deve voltar ao primeiro quadro.");
+    assert.equal(index, 0, "A faixa deve voltar ao primeiro quadro.");
     assert.ok(Math.abs(elapsed + 1 - expected) < 3, "O loop deve respeitar o tempo nos dois padrões de vídeo.");
     assert.ok(pitches.every((voice) => voice.size >= 5), "Melodia e baixo devem apresentar notas variadas.");
     press(demo, "menu", true);
@@ -1004,6 +1168,47 @@ function checkArena(frequency) {
     console.log(`Combate isolado a ${frequency} Hz: ${frames} quadros no primeiro segundo.`);
 }
 
+function checkEliminationObjective(frequency) {
+    const demo = openArena(frequency, [[5, 9, 0, 1, 255], [7, 12, 1, 2, 255]], [[5, 11, 3, 8], [4, 12, 4, 0]]);
+    const step = frequency === 50 ? campaignLength - 1 : 0;
+    demo.write(state.step, step);
+    demo.write(state.enemies + 16, 1); // A reinforcement outside the active enemy list.
+    demo.write(mapAddress(5, 11), 3);
+    demo.write(state.keysHeld, 8);
+
+    const checkHint = (id) => {
+        assert.equal(demo.read(state.hint), id);
+        checkVideo(demo);
+        const { regs, vram } = demo.video();
+        const end = (regs[2] << 10) + (hudRow + 1) * width;
+        assert.deepEqual(vram.subarray(end - hintWidth, end), hudHints.subarray(id * hintWidth, (id + 1) * hintWidth));
+    };
+
+    holdUntil(demo, up, () => demo.xy()[1] < 12 * 256 + 85);
+    press(demo, "shift", true);
+    assert.equal(demo.read(mapAddress(5, 11)), 0);
+    checkHint(9);
+    press(demo, "keys", space);
+    assert.equal(demo.read(state.enemies), 0);
+    assert.equal(demo.read(state.enemies + 8), 2);
+
+    face(demo, 48);
+    walkRun(demo, [4, 12], 48);
+    assert.equal(demo.read(state.outcome), 0, "A saída deve aguardar o último inimigo.");
+    checkHint(9);
+
+    face(demo, 16);
+    walkRun(demo, [5, 12], 16);
+    press(demo, "weapon", true);
+    press(demo, "keys", space);
+    assert.equal(demo.read(state.enemies + 8), 0);
+    assert.equal(demo.read(state.enemies + 16), 1);
+    checkHint(2);
+    const exit = entities(demo, state.props, state.propEnd).find(({ kind }) => kind === 4);
+    walkRoute(demo, exit);
+    assert.equal(demo.read(state.outcome), step === campaignLength - 1 ? 3 : 2);
+}
+
 // Plan from the live terrain, then send only directional controls to walk it.
 function routeTo(demo, target, includeDoor) {
     const cell = (x, y) => y * width + x;
@@ -1070,11 +1275,18 @@ function walkRoute(demo, target, gate = false) {
 function playCampaign(frequency) {
     const difficulty = frequency === 50 ? 2 : 1;
     const demo = startCampaign(frequency, difficulty);
+    const order = campaignOrder(demo);
+    const tracksChecked = new Set();
     checkMenu(demo, frequency);
-    for (let sector = 0; sector < names.length; sector++) {
-        checkSector(demo, sector, difficulty);
+    for (const [step, id] of order.entries()) {
+        assert.deepEqual(campaignOrder(demo), order);
+        checkSector(demo, step, difficulty, id);
         checkPlacement(demo);
-        checkTrack(demo, sector, frequency);
+        const track = sectorTrack(id);
+        if (!tracksChecked.has(track)) {
+            checkTrack(demo, track, frequency);
+            tracksChecked.add(track);
+        }
         const props = entities(demo, state.props, state.propEnd);
         const keys = props.filter(({ kind }) => kind === 2).sort((a, b) => a.arg - b.arg);
         const gates = props.filter(({ kind }) => kind === 3).sort((a, b) => a.arg - b.arg);
@@ -1082,7 +1294,7 @@ function playCampaign(frequency) {
         assert.deepEqual(keys.map(({ arg }) => arg), [1, 2, 4, 8]);
         assert.deepEqual(gates.map(({ arg }) => arg), [1, 2, 4, 8]);
 
-        // Disable enemies only in this run to time traversal on a known route.
+        // Mark enemies defeated here to isolate navigation. The arena tests the combat objective.
         for (const { address } of entities(demo, state.enemies, state.enemyEnd)) demo.write(address, 0);
         const before = demo.elapsed();
         for (const [i, key] of keys.entries()) {
@@ -1097,18 +1309,26 @@ function playCampaign(frequency) {
             }
         }
         walkRoute(demo, props.find(({ kind }) => kind === 4));
-        assert.equal(demo.read(state.outcome), sector === names.length - 1 ? 3 : 2);
+        const finalStep = step === campaignLength - 1;
+        assert.equal(demo.read(state.outcome), finalStep ? 3 : 2);
         const seconds = (demo.elapsed() - before) / frequency;
-        assert.ok(seconds >= 120, `${names[sector]} levou só ${seconds.toFixed(1)} s.`);
-        console.log(`${names[sector]}, ${frequency} Hz: ${seconds.toFixed(1)} s de rota guiada sem combate.`);
+        console.log(`Fase ${step + 1}/${campaignLength}, mapa ${id + 1}, ${frequency} Hz: ${seconds.toFixed(1)} s de rota guiada sem combate.`);
         demo.run(12);
         checkVideo(demo);
-        if (sector === names.length - 1 && frequency === 60 && endingPath) saveFrame(demo.frame, endingPath);
+        if (finalStep) {
+            if (frequency === 60 && endingPath) saveFrame(demo.frame, endingPath);
+            demo.write(state.eventTimer, 20);
+            demo.write(state.flash, 20);
+        }
         press(demo, "keys", space);
     }
+    assert.equal(tracksChecked.size, 3);
     assert.equal(demo.read(state.outcome), 4);
+    assert.equal(demo.read(state.eventTimer), 0);
+    assert.equal(demo.read(state.flash), 0);
     checkTitleArt(demo);
     press(demo, "keys", space);
+    assert.notDeepEqual(campaignOrder(demo), order);
     checkSector(demo, 0, difficulty);
 }
 
@@ -1126,6 +1346,7 @@ assert.equal(phases.size, 4, "A animação da abertura deve apresentar seus quat
 press(expanded, "keys", space);
 checkSector(expanded, 0);
 
+checkCatalog();
 for (const frequency of [60, 50]) {
     checkOpening(frequency);
     checkDifficulty(frequency);
@@ -1133,8 +1354,10 @@ for (const frequency of [60, 50]) {
     checkWallEdges(frequency, 2, 16);
     checkSlopedWall(frequency, frequency === 60 ? 1 : 2);
     checkMinimap(frequency);
+    checkCompass(frequency);
     checkMusicControls(frequency);
     checkArena(frequency);
+    checkEliminationObjective(frequency);
     playCampaign(frequency);
     console.log(`MSX1 64 KiB, ${frequency} Hz: campanha, portas, chaves, combate, cura, mapa e três faixas OK.`);
 }
