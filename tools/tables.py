@@ -79,6 +79,8 @@ FONT = {
     "V": "333333331e0c0c",
     "X": "33331e0c1e3333",
     "Z": "3f03060c18303f",
+    "+": "000c0c3f0c0c00",
+    "-": "0000003f000000",
     "0": "1e33373b33331e",
     "1": "0c1c0c0c0c0c1e",
     "2": "1e3303060c183f",
@@ -204,10 +206,10 @@ def panel_data(field, rows):
     """Encode sparse rows of text as destination offset, length and tile IDs."""
     blocks = []
     for row, column, tiles in rows:
-        if not (0 <= row < 20 and 0 <= column <= 32 - len(tiles) and tiles):
+        if not (-4 <= row < 20 and 0 <= column <= 32 - len(tiles) and tiles):
             raise ValueError("Elemento do menu fora da tela.")
         offset = row * 32 + column
-        blocks.extend((len(tiles), offset & 255, offset >> 8, *tiles))
+        blocks.extend((len(tiles), offset & 255, (offset >> 8) & 255, *tiles))
     return data(field, (*blocks, 0))
 
 
@@ -499,8 +501,39 @@ def generate():
           for index, (_, name, icon) in enumerate(markers)),
         (15, 2, marker_row("CURA", heart_full)),
     ])
-    menu_hud = label(" ESQ MAPA             M VOLTAR".ljust(32), 15)
-    map_hud = label(" DIR LEGENDA  SUBIR DESCER  M".ljust(32), 15)
+    arrows = dict(zip("↑→↓←", directions))
+
+    def menu_tiles(text, accent=15):
+        return [arrows[char] if char in arrows else label(char, accent)[0] for char in text]
+
+    controls = (
+        ("AVANCAR RECUAR", "↑ ↓", "↑ ↓"),
+        ("GIRAR", "← →", "← →"),
+        ("MOVER E GIRAR", "2 SETAS", "DIAGONAL"),
+        ("ATIRAR", "ESPACO", "A"),
+        ("ABRIR PORTA", "SHIFT", "B"),
+        ("TROCAR ARMA", "X", "B+↑"),
+        ("PAUSAR VOLTAR", "M", "A+B"),
+        ("MINIMAPA", "N", "B+↓"),
+        ("MUSICA", "T", "B+→"),
+        ("REINICIAR FASE", "R", "-"),
+        ("ROLAR O MAPA", "↑ ↓", "↑ ↓"),
+        ("MUDAR ABA", "← →", "← →"),
+        ("ESCOLHER NIVEL", "← →", "← →"),
+        ("INICIO AVANCO", "ESPACO", "A"),
+        ("NOVA TENTATIVA", "ESPACO", "A"),
+        ("TITULO NO FIM", "ESPACO", "A"),
+    )
+    controls_panel = panel("controls_panel", [
+        (-2, 12, label("COMANDOS", 15)),
+        (0, 1, label("ACAO           TECLADO CONTROLE", 11)),
+        *((row, 1, menu_tiles(f"{action:<14} {keyboard:<7} {joystick}"))
+          for row, (action, keyboard, joystick) in enumerate(controls, 1)),
+        (18, 1, label("SEGURE ESPACO OU A PARA REPETIR", 15)),
+    ])
+    map_hud = menu_tiles(" → LEGENDA    ↑↓ ROLAR  M VOLTAR".ljust(32))
+    legend_hud = menu_tiles(" ← MAPA    → COMANDOS   M VOLTAR".ljust(32))
+    controls_hud = menu_tiles(" ← LEGENDA              M VOLTAR".ljust(32))
 
     def story_panel(field, title, detail, action, accent=7):
         return panel(field, [
@@ -556,7 +589,8 @@ def generate():
     for bank in used_tiles:
         bank.update(common_tiles)
     used_tiles[0].update([ceiling_tile, *mini_terrain])
-    used_tiles[2].update(menu_hud + map_hud + hud + weapons + digits + [heart_empty, meter_idle, meter_active])
+    used_tiles[2].update(map_hud + legend_hud + controls_hud + hud + weapons + digits
+                         + [heart_empty, meter_idle, meter_active])
     used_tiles[2].update(difficulty_names)
     used_tiles[2].update(index for hint in hint_tiles for index in hint)
     compass = compass_data(used_tiles[0])
@@ -619,8 +653,10 @@ def generate():
         data("difficulty_names", difficulty_names),
         data("campaign_panels", ("death_panel", "clear_panel", "last_panel"), "dw"),
         legend_panel,
-        data("menu_hud", menu_hud),
+        controls_panel,
         data("map_hud", map_hud),
+        data("legend_hud", legend_hud),
+        data("controls_hud", controls_hud),
         data("map_arrows", directions),
         f"map_open_door: equ {door_passage}",
         *(f"map_{kind}: equ {icon}" for kind, _, icon in markers if kind != "player"),

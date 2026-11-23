@@ -240,26 +240,41 @@ const state = {
     musicEnabled: 0xf151, musicPhase: 0xf154, musicLoop: 0xf156, musicNext: 0xf158, musicB: 0xf15a, musicC: 0xf15c,
     musicOrder: 0xf19c,
     eventTimer: 0xf128,
-    wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400, campaignPool: 0xc4a0,
+    wallDepth: 0xf160, enemies: 0xc420, props: 0xc520, map: 0xc400, campaignRanks: 0xc4a0,
 };
 const up = 0x20;
 const down = 0x40;
 const right = 0x80;
 const space = 1;
+const menuMap = 1;
+const menuLegend = 2;
+const menuControls = 3;
 const width = 32;
 const height = 44;
 const sectorCount = 21;
 const campaignLength = 12;
-const lastPoolSlot = state.campaignPool + sectorCount - 1;
+const mapsPerBand = 3;
+const gateBitsByBand = [[1, 8], [1, 2, 8], [1, 2, 4, 8], [1, 2, 4, 8]];
+const lastRankSlot = state.campaignRanks + campaignLength - 1;
 const rankedSectors = romTiles("sector_difficulty_order", sectorCount);
+const sectorBands = romTiles("sector_band_sizes", gateBitsByBand.length);
 assert.equal(new Set(rankedSectors).size, sectorCount);
 assert.ok(rankedSectors.every((id) => id < sectorCount));
+assert.equal(sectorBands.reduce((total, size) => total + size, 0), sectorCount);
 
 function campaignOrder(demo) {
-    const ranks = Array.from({ length: campaignLength }, (_, step) => demo.read(lastPoolSlot - step));
+    const ranks = Array.from({ length: campaignLength }, (_, step) => demo.read(lastRankSlot - step));
     assert.ok(ranks.every((rank) => rank < sectorCount));
     assert.ok(ranks.slice(1).every((rank, index) => rank > ranks[index]),
         "As 12 fases devem ter dificuldade estritamente crescente, sem repetir mapas.");
+    let firstRank = 0;
+    for (const [band, bandSize] of sectorBands.entries()) {
+        const firstStep = band * mapsPerBand;
+        const picks = ranks.slice(firstStep, firstStep + mapsPerBand);
+        assert.ok(picks.every((rank) => rank >= firstRank && rank < firstRank + bandSize),
+            "O sorteio deve escolher três mapas por faixa de complexidade.");
+        firstRank += bandSize;
+    }
     return ranks.map((rank) => rankedSectors[rank]);
 }
 
@@ -269,14 +284,9 @@ function sectorTrack(id) {
 
 function selectFirstMap(demo, id) {
     const rank = rankedSectors.indexOf(id);
-    for (let slot = state.campaignPool; slot <= lastPoolSlot; slot++) {
-        if (demo.read(slot) !== rank) continue;
-        demo.write(slot, demo.read(lastPoolSlot));
-        demo.write(lastPoolSlot, rank);
-        press(demo, "retry", true);
-        return;
-    }
-    assert.fail(`Mapa ${id + 1} ausente do catálogo da campanha.`);
+    assert.notEqual(rank, -1);
+    demo.write(lastRankSlot, rank);
+    press(demo, "retry", true);
 }
 
 function mapAddress(x, y) {
@@ -785,7 +795,7 @@ function checkCatalog() {
 function checkMenu(demo, frequency) {
     const ammo = demo.read(state.ammo);
     press(demo, "menu", true);
-    assert.equal(demo.read(state.menu), 2, "A pausa deve abrir no mapa.");
+    assert.equal(demo.read(state.menu), menuMap, "A pausa deve abrir no mapa.");
     assert.equal(demo.video().vram[0x1b00], 208);
     const frozen = demo.xy();
     checkPlayerMarker(demo);
@@ -798,8 +808,11 @@ function checkMenu(demo, frequency) {
     assert.equal(demo.read(state.mapTop), origin);
     if (frequency === 60 && mapPath) saveFrame(demo.frame, mapPath);
 
-    press(demo, "stick", 0x08);
-    assert.equal(demo.read(state.menu), 1);
+    demo.inputs.stick = 0x08;
+    demo.run(30);
+    demo.inputs.stick = 0;
+    demo.run(12);
+    assert.equal(demo.read(state.menu), menuLegend, "Segurar a direção deve avançar só uma aba.");
     const legend = demo.currentView();
     for (const [index, tile] of terrain.entries()) assert.equal(legend[(5 + 2 * index) * 32 + 2], tile);
     for (const [index, tile] of [playerArrows[0], ...visibleObjects].entries()) {
@@ -808,12 +821,49 @@ function checkMenu(demo, frequency) {
     assert.equal(legend[15 * 32 + 2], heartFull);
     if (frequency === 60 && legendPath) saveFrame(demo.frame, legendPath);
 
+    press(demo, "keys", right);
+    assert.equal(demo.read(state.menu), menuControls);
+    checkControlsPanel(demo);
+    press(demo, "keys", right);
+    press(demo, "keys", up);
+    assert.equal(demo.read(state.menu), menuControls);
+    assert.deepEqual(demo.xy(), frozen, "As abas mantêm o jogo pausado.");
+    press(demo, "stick", 0x28); // B + right controls the music, not the tab.
+    assert.equal(demo.read(state.menu), menuControls);
+    press(demo, "music", true); // Restore the music for the campaign test.
+    press(demo, "stick", 0x04);
+    assert.equal(demo.read(state.menu), menuLegend);
     press(demo, "keys", 0x10);
-    assert.equal(demo.read(state.menu), 2);
+    assert.equal(demo.read(state.menu), menuMap);
     checkPlayerMarker(demo);
+    press(demo, "keys", 0x10);
+    assert.equal(demo.read(state.menu), menuMap);
+
+    press(demo, "keys", right);
+    press(demo, "keys", right);
+    assert.equal(demo.read(state.menu), menuControls);
     press(demo, "stick", 0x30);
     assert.equal(demo.read(state.menu), 0);
     assert.equal(demo.read(state.ammo), ammo, "Abrir ou fechar o menu não deve disparar.");
+    checkVideo(demo);
+}
+
+function checkControlsPanel(demo) {
+    const { regs, vram } = demo.video();
+    const screen = regs[2] << 10;
+    let cursor = romAddress("controls_panel") - 0x4000;
+    let rows = 0;
+    while (cartridge[cursor]) {
+        const length = cartridge[cursor++];
+        const at = screen + 4 * width + cartridge.readInt16LE(cursor);
+        cursor += 2;
+        assert.deepEqual(vram.subarray(at, at + length), cartridge.subarray(cursor, cursor + length));
+        cursor += length;
+        rows++;
+    }
+    assert.equal(rows, 19, "A aba deve mostrar o título, os cabeçalhos, os 16 comandos e a instrução de disparo.");
+    const footer = screen + hudRow * width;
+    assert.deepEqual(vram.subarray(footer, footer + width), romTiles("controls_hud", width));
     checkVideo(demo);
 }
 
@@ -1011,7 +1061,7 @@ function checkMusicControls(frequency) {
 
     press(demo, "menu", true);
     press(demo, "stick", 0x28);
-    assert.equal(demo.read(state.menu), 2, "Alternar a música não deve trocar a aba do mapa.");
+    assert.equal(demo.read(state.menu), menuMap, "Alternar a música não deve trocar a aba do mapa.");
     assert.equal(demo.read(state.musicEnabled), 0);
     press(demo, "menu", true);
     press(demo, "retry", true);
@@ -1290,17 +1340,19 @@ function playCampaign(frequency) {
         const props = entities(demo, state.props, state.propEnd);
         const keys = props.filter(({ kind }) => kind === 2).sort((a, b) => a.arg - b.arg);
         const gates = props.filter(({ kind }) => kind === 3).sort((a, b) => a.arg - b.arg);
-        assert.equal(keys.length, 4);
-        assert.deepEqual(keys.map(({ arg }) => arg), [1, 2, 4, 8]);
-        assert.deepEqual(gates.map(({ arg }) => arg), [1, 2, 4, 8]);
+        const requiredKeys = gateBitsByBand[Math.floor(step / mapsPerBand)];
+        assert.deepEqual(keys.map(({ arg }) => arg), requiredKeys);
+        assert.deepEqual(gates.map(({ arg }) => arg), requiredKeys);
 
         // Mark enemies defeated here to isolate navigation. The arena tests the combat objective.
         for (const { address } of entities(demo, state.enemies, state.enemyEnd)) demo.write(address, 0);
         const before = demo.elapsed();
+        let held = 0;
         for (const [i, key] of keys.entries()) {
             walkRoute(demo, key);
             assert.equal(demo.read(key.address), 0);
-            assert.equal(demo.read(state.keysHeld), (1 << (i + 1)) - 1);
+            held |= key.arg;
+            assert.equal(demo.read(state.keysHeld), held);
             walkRoute(demo, gates[i], true);
             if (i === 1) {
                 press(demo, "menu", true);

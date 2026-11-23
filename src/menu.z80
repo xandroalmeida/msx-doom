@@ -1,38 +1,53 @@
-; The game simulation stops while either tab is open.
+; The game simulation stops while any pause tab is open.
+menu_map:      equ 1
+menu_legend:   equ 2
+menu_controls: equ 3
 
 toggle_menu:
     xor a
     ld (shot_repeat),a
+    ld (menu_direction),a
     ld a,(menu_state)
     or a
     jr z,select_map
-    ld a,0
+    xor a
 select_menu:
     ld (menu_state),a
     jp mark_dirty
 
 menu_tick:
     call read_direction
-    cp 7                          ; left: map
-    jr z,select_map
-    cp 3                          ; right: legend
+    ld hl,menu_direction
+    ld b,(hl)
+    ld (hl),a
+    cp 3                          ; right: next tab
+    jr z,next_tab
+    cp 7                          ; left: previous tab
     jr nz,scroll_map
-    ld a,1
-    jr change_tab
-select_map:
-    ld a,(menu_state)
-    cp 2
+    cp b
     ret z
+    ld a,(menu_state)
+    cp menu_map
+    ret z
+    dec a
+    cp menu_map
+    jr z,select_map
+    jr select_menu
+next_tab:
+    cp b
+    ret z
+    ld a,(menu_state)
+    cp menu_controls
+    ret z
+    inc a
+    jr select_menu
+select_map:
     ld a,(player_y+1)
     sub 8
     ld c,map_height-16
     call clamp_map_origin
     ld (map_top),a
-    ld a,2
-change_tab:
-    ld hl,menu_state
-    cp (hl)
-    ret z
+    ld a,menu_map
     jr select_menu
 
 clamp_map_origin:
@@ -47,7 +62,7 @@ map_limit:
 scroll_map:
     ld b,a
     ld a,(menu_state)
-    cp 2
+    cp menu_map
     ret nz
     ld a,b
     ld hl,map_top
@@ -82,19 +97,25 @@ show_game_sprites:
 render_menu:
     call clear_view
     ld a,(menu_state)
-    dec a
-    ld hl,menu_hud
-    jr z,copy_menu_hud
+    cp menu_map
     ld hl,map_hud
+    jr z,copy_menu_hud
+    cp menu_legend
+    ld hl,legend_hud
+    jr z,copy_menu_hud
+    ld hl,controls_hud
 copy_menu_hud:
     ld de,hud
     ld bc,32
     ldir
     ld a,(menu_state)
-    dec a
+    cp menu_map
+    jp z,draw_map
+    cp menu_legend
     ld hl,legend_panel
-    jp z,draw_panel
-    jp draw_map
+    jr z,draw_panel
+    ld hl,controls_panel
+    jr draw_panel
 
 clear_view:
     ld hl,frame

@@ -12,7 +12,7 @@
 
 ## English
 
-Posto Umbra is an original Doom-inspired first-person shooter for the **MSX1 with 64 KiB of RAM**. Each campaign draws 12 different sectors from a catalog of 21. Each sector has 32 × 44 tiles and four gates. It features three difficulty levels, two weapons and a 32 KiB linear cartridge ROM.
+Posto Umbra is an original Doom-inspired first-person shooter for the **MSX1 with 64 KiB of RAM**. Each campaign draws 12 different sectors from a catalog of 21. Each sector has 32 × 44 tiles and two to four gates. It features three difficulty levels, two weapons and a 32 KiB linear cartridge ROM.
 
 ### Original sectors
 
@@ -39,16 +39,17 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Action | Keyboard | Joystick port 1 |
 | --- | --- | --- |
 | Select difficulty on the title screen | ← / → | Left / right |
-| Start, advance to the next sector or confirm a retry | Space | Button A |
+| Start, advance, confirm a retry or return to the title after the ending | Space | Button A |
 | Walk forward or backward | ↑ / ↓ | Up / down |
 | Turn | ← / → | Left / right |
+| Move and turn together | Hold two perpendicular arrows | Diagonal |
 | Fire or hold for repeated shots | Space | Button A |
 | Switch weapons | X | B + up |
 | Open a door | Shift | Button B |
 | Open or close the pause menu | M | A + B |
 | Toggle the live minimap | N | B + down |
 | Toggle campaign music | T | B + right |
-| Switch between the pause map and its legend | ← / → | Left / right |
+| Switch between the pause map, legend and controls | ← / → | Left / right |
 | Scroll the pause map | ↑ / ↓ | Up / down |
 | Restart the current sector | R | — |
 
@@ -62,9 +63,9 @@ Select **Fácil** (Easy), **Normal** or **Difícil** (Hard) on the title screen 
 
 The pistol uses one round and can hit distant targets. The pulse weapon uses two rounds and deals two points of damage at short range. Yellow ammo boxes provide eight rounds, and hearts restore up to two health points. Purple brutes can take more hits and attack from farther away.
 
-Find all four keys in each sector, open their gates and eliminate every enemy. The green exit clears the sector only after the last enemy is defeated. Your starting health and ammo are restored in each new sector and on each retry. Press Space after the ending screen to return to the title.
+Find the keys in each sector, open their gates and eliminate every enemy. The green exit clears the sector only after the last enemy is defeated. Your starting health and ammo are restored in each new sector and on each retry. Press Space after the ending screen to return to the title.
 
-Starting a campaign from the title screen draws 12 sectors without repeats and orders them from easiest to hardest. The ranking weighs the required route, enemy health, ammunition and healing. The game also randomizes enemy, ammo, health and key positions, using free tiles and keeping each key reachable before its gate. Restarting or retrying a sector preserves both its positions and the campaign order.
+Each campaign draws three sectors from each of four bands of map complexity. The first three have wide rooms, short routes and two gates. The next three have longer routes and three gates. The last six have four gates and lead into longer mazes. Within each band, sectors are ordered by required route length, with combat and supplies breaking ties. The game also randomizes enemy, ammo, health and key positions, using free tiles and keeping each key reachable before its gate. Restarting or retrying a sector preserves both its positions and the campaign order.
 
 The 3D view takes up 256 × 184 pixels. The compass at the top of the HUD has a round dial with a yellow needle that turns with your aim. The Portuguese labels use **L** for east and **O** for west. The compass stays visible when you hide the minimap. The bottom HUD row shows health, ammo, your weapon, the campaign step (S01–S12) and an objective hint. When you get hit, a heart becomes hollow, the scene flashes red and the PSG plays a short impact sound. All five hearts appear hollow on the defeat screen.
 
@@ -72,7 +73,7 @@ The 3D view takes up 256 × 184 pixels. The compass at the top of the HUD has a 
 
 The live minimap in the top-right corner shows terrain, passage status and an arrow for your position and heading. Press **N** to toggle it. Your choice is kept until you power off or reload the cartridge.
 
-**M** pauses the game and opens the map at your current position. **↑/↓** scroll the map, **→** opens the legend, **←** returns to the map and **M** resumes play. The white arrow shows your position and heading. This map also shows open and closed gates, enemies, ammo, health, keys and the exit.
+**M** pauses the game and opens the map at your current position. **↑/↓** scroll the map. Press **→** to open the legend, then press it again to see the controls for keyboard and joystick. **←** goes back one tab and **M** resumes play. The white arrow shows your position and heading. This map also shows open and closed gates, enemies, ammo, health, keys and the exit.
 
 The map and legend symbols use level tiles from `TERRAIN` and `OBJECT_ART`. When adding or changing a visible terrain or object type, update those definitions and the test. For new dynamic objects, update marker drawing in the pause menu as well.
 
@@ -120,7 +121,7 @@ Capture paths are optional. The WAV is recorded from the emulated PSG. The suite
 
 ## Português
 
-Posto Umbra é um jogo original de tiro em primeira pessoa inspirado em Doom para **MSX1 com 64 KiB de RAM**. Cada campanha sorteia 12 setores diferentes de um catálogo de 21. Cada setor tem 32 × 44 células e quatro portões. O jogo oferece três dificuldades e duas armas em um cartucho linear de 32 KiB.
+Posto Umbra é um jogo original de tiro em primeira pessoa inspirado em Doom para **MSX1 com 64 KiB de RAM**. Cada campanha sorteia 12 setores diferentes de um catálogo de 21. Cada setor tem 32 × 44 células e de dois a quatro portões. O jogo oferece três dificuldades e duas armas em um cartucho linear de 32 KiB.
 
 ### Fases originais
 
@@ -147,16 +148,17 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Ação | Teclado | Joystick da porta 1 |
 | --- | --- | --- |
 | Escolher a dificuldade na tela de título | ← / → | Esquerda / direita |
-| Começar, avançar de setor ou confirmar uma nova tentativa | Espaço | Botão A |
+| Começar, avançar, tentar de novo ou voltar ao título após o final | Espaço | Botão A |
 | Avançar ou recuar | ↑ / ↓ | Cima / baixo |
 | Girar | ← / → | Esquerda / direita |
+| Andar e girar ao mesmo tempo | Duas setas perpendiculares | Diagonal |
 | Atirar ou manter uma sequência de disparos | Espaço | Botão A |
 | Trocar de arma | X | B + cima |
 | Abrir uma porta | Shift | Botão B |
 | Abrir ou fechar o menu de pausa | M | A + B |
 | Mostrar ou ocultar o minimapa | N | B + baixo |
 | Ligar ou desligar a trilha da campanha | T | B + direita |
-| Alternar entre o mapa de pausa e a legenda | ← / → | Esquerda / direita |
+| Alternar entre mapa de pausa, legenda e comandos | ← / → | Esquerda / direita |
 | Rolar o mapa de pausa | ↑ / ↓ | Cima / baixo |
 | Reiniciar o setor atual | R | — |
 
@@ -170,9 +172,9 @@ Na tela de título, escolha **Fácil**, **Normal** ou **Difícil** antes de aper
 
 A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas cargas e causa dois pontos de dano em alcance curto. As caixas amarelas fornecem oito cargas, e os corações recuperam até dois pontos de vida. O bruto roxo aguenta mais disparos e alcança o jogador de mais longe no ataque.
 
-Encontre as quatro chaves de cada setor, abra os portões correspondentes e elimine todos os inimigos. O sinal verde só encerra a fase depois que o último inimigo cair. O HUD mostra **MATE TODOS** se ainda houver inimigos ao abrir o último portão ou chegar à saída. A vida e a munição iniciais são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
+Encontre as chaves de cada setor, abra os portões correspondentes e elimine todos os inimigos. O sinal verde só encerra a fase depois que o último inimigo cair. O HUD mostra **MATE TODOS** se ainda houver inimigos ao abrir o último portão ou chegar à saída. A vida e a munição iniciais são repostas a cada setor e em cada nova tentativa. Depois da tela final, Espaço volta ao título.
 
-Ao iniciar uma campanha na tela de título, o jogo sorteia 12 setores sem repetição e os ordena do mais fácil ao mais difícil. A classificação leva em conta a rota obrigatória, a resistência dos inimigos, a munição e a cura. O jogo também sorteia as posições de inimigos, munição, cura e chaves, usando células livres e mantendo cada chave acessível antes do portão correspondente. Reiniciar ou tentar de novo preserva as posições do setor e a ordem da campanha.
+Cada campanha sorteia três setores de cada uma das quatro faixas de complexidade. As três primeiras fases têm salas amplas, rotas curtas e dois portões. As três seguintes têm rotas mais longas e três portões. As seis finais têm quatro portões e chegam aos labirintos mais longos. Dentro de cada faixa, a ordem segue o comprimento da rota obrigatória, com combate e suprimentos como critérios de desempate. O jogo também sorteia as posições de inimigos, munição, cura e chaves, usando células livres e mantendo cada chave acessível antes do portão correspondente. Reiniciar ou tentar de novo preserva as posições do setor e a ordem da campanha.
 
 A visão 3D ocupa 256 × 184 pixels. A bússola no topo do HUD tem um mostrador circular com **N**, **L**, **S** e **O**. O ponteiro amarelo gira junto com a mira, mesmo com o minimapa desligado. A linha inferior mostra corações, munição, arma, posição na campanha (S01–S12) e uma dica de objetivo. Ao sofrer dano, um coração fica vazado, o cenário pisca em vermelho e o PSG toca um som breve de impacto. Os cinco corações aparecem vazados na tela de derrota.
 
@@ -180,7 +182,7 @@ A visão 3D ocupa 256 × 184 pixels. A bússola no topo do HUD tem um mostrador 
 
 O minimapa no canto superior direito mostra o terreno, o estado das passagens e uma seta com a posição e a direção do jogador. **N** alterna a exibição durante a partida. A preferência vale até desligar ou recarregar o cartucho.
 
-**M** pausa e abre o mapa na altura do jogador. **↑/↓** rolam o mapa, **→** abre a legenda, **←** volta ao mapa e **M** retoma a partida. A seta branca indica a posição e a direção do jogador. Este mapa também mostra portões abertos e fechados, inimigos, munição, cura, chaves e a saída.
+**M** pausa e abre o mapa na altura do jogador. **↑/↓** rolam o mapa. Aperte **→** para abrir a legenda e mais uma vez para ver os comandos de teclado e joystick. **←** volta uma aba e **M** retoma a partida. A seta branca indica a posição e a direção do jogador. Este mapa também mostra portões abertos e fechados, inimigos, munição, cura, chaves e a saída.
 
 Os símbolos da legenda e do mapa usam os tiles da fase definidos em `TERRAIN` e `OBJECT_ART`. Ao mudar ou adicionar um tipo de terreno ou objeto visível, atualize esses registros e o teste. Para um novo objeto dinâmico, atualize também o desenho de marcadores no menu de pausa.
 
@@ -228,7 +230,7 @@ Os caminhos de captura são opcionais. O WAV vem do PSG emulado. A suíte verifi
 
 ## Español
 
-Posto Umbra es un juego original de disparos en primera persona inspirado en Doom para **MSX1 con 64 KiB de RAM**. Cada campaña sortea 12 sectores distintos de un catálogo de 21. Cada sector tiene 32 × 44 casillas y cuatro portones. El juego ofrece tres niveles de dificultad y dos armas en un cartucho lineal de 32 KiB.
+Posto Umbra es un juego original de disparos en primera persona inspirado en Doom para **MSX1 con 64 KiB de RAM**. Cada campaña sortea 12 sectores distintos de un catálogo de 21. Cada sector tiene 32 × 44 casillas y entre dos y cuatro portones. El juego ofrece tres niveles de dificultad y dos armas en un cartucho lineal de 32 KiB.
 
 ### Niveles originales
 
@@ -255,16 +257,17 @@ openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 | Acción | Teclado | Mando del puerto 1 |
 | --- | --- | --- |
 | Elegir la dificultad en la pantalla de título | ← / → | Izquierda / derecha |
-| Empezar, pasar al siguiente sector o confirmar un reintento | Espacio | Botón A |
+| Empezar, avanzar, reintentar o volver al título tras el final | Espacio | Botón A |
 | Avanzar o retroceder | ↑ / ↓ | Arriba / abajo |
 | Girar | ← / → | Izquierda / derecha |
+| Moverse y girar a la vez | Dos flechas perpendiculares | Diagonal |
 | Disparar o mantener el fuego | Espacio | Botón A |
 | Cambiar de arma | X | B + arriba |
 | Abrir una puerta | Mayús | Botón B |
 | Abrir o cerrar el menú de pausa | M | A + B |
 | Mostrar u ocultar el minimapa | N | B + abajo |
 | Activar o desactivar la música de la campaña | T | B + derecha |
-| Alternar entre el mapa de pausa y la leyenda | ← / → | Izquierda / derecha |
+| Alternar entre el mapa de pausa, la leyenda y los controles | ← / → | Izquierda / derecha |
 | Desplazar el mapa de pausa | ↑ / ↓ | Arriba / abajo |
 | Reiniciar el sector actual | R | — |
 
@@ -278,9 +281,9 @@ En la pantalla de título, elige **Fácil**, **Normal** o **Difícil** antes de 
 
 La pistola consume una carga y alcanza objetivos distantes. El arma de pulso consume dos cargas e inflige dos puntos de daño a corta distancia. Las cajas amarillas aportan ocho cargas y los corazones recuperan hasta dos puntos de vida. El bruto morado resiste más disparos y ataca desde más lejos.
 
-Encuentra las cuatro llaves de cada sector, abre sus portones y elimina a todos los enemigos. La salida verde solo permite completar el nivel después de derrotar al último enemigo. La vida y la munición se reponen a sus valores iniciales en cada sector y en cada reintento. Pulsa Espacio tras la pantalla final para volver al título.
+Encuentra las llaves de cada sector, abre sus portones y elimina a todos los enemigos. La salida verde solo permite completar el nivel después de derrotar al último enemigo. La vida y la munición se reponen a sus valores iniciales en cada sector y en cada reintento. Pulsa Espacio tras la pantalla final para volver al título.
 
-Al iniciar una campaña en la pantalla de título, el juego sortea 12 sectores sin repetirlos y los ordena del más fácil al más difícil. La clasificación tiene en cuenta la ruta obligatoria, la resistencia de los enemigos, la munición y la curación. El juego también distribuye al azar los enemigos, la munición, la curación y las llaves en casillas libres, manteniendo cada llave accesible antes de su portón. Reiniciar o reintentar un sector conserva sus posiciones y el orden de la campaña.
+Cada campaña sortea tres sectores de cada una de las cuatro franjas de complejidad. Los primeros tres niveles tienen salas amplias, rutas cortas y dos portones. Los tres siguientes tienen rutas más largas y tres portones. Los seis últimos tienen cuatro portones y dan paso a laberintos más largos. Dentro de cada franja, el orden sigue la longitud de la ruta obligatoria, con el combate y los suministros como criterios de desempate. El juego también distribuye al azar los enemigos, la munición, la curación y las llaves en casillas libres, manteniendo cada llave accesible antes de su portón. Reiniciar o reintentar un sector conserva sus posiciones y el orden de la campaña.
 
 La vista 3D ocupa 256 × 184 píxeles. La brújula superior tiene una esfera circular con una aguja amarilla que gira con la mira. Las etiquetas en portugués usan **L** para el este y **O** para el oeste. La brújula sigue visible al ocultar el minimapa. La fila inferior muestra los corazones, la munición, el arma, la posición en la campaña (S01–S12) y una pista del objetivo. Al recibir daño, un corazón se vacía, la escena parpadea en rojo y el PSG reproduce un sonido breve de impacto. En la pantalla de derrota aparecen los cinco corazones vacíos.
 
@@ -288,7 +291,7 @@ La vista 3D ocupa 256 × 184 píxeles. La brújula superior tiene una esfera cir
 
 El minimapa de la esquina superior derecha muestra el terreno, el estado de los pasos y una flecha con tu posición y orientación. Pulsa **N** para mostrarlo u ocultarlo. Tu elección se conserva hasta apagar o volver a cargar el cartucho.
 
-**M** pausa la partida y abre el mapa en tu posición actual. **↑/↓** desplazan el mapa, **→** abre la leyenda, **←** vuelve al mapa y **M** reanuda la partida. La flecha blanca señala tu posición y orientación. Este mapa también muestra portones abiertos y cerrados, enemigos, munición, curación, llaves y la salida.
+**M** pausa la partida y abre el mapa en tu posición actual. **↑/↓** desplazan el mapa. Pulsa **→** para abrir la leyenda y otra vez para ver los controles de teclado y mando. **←** retrocede una pestaña y **M** reanuda la partida. La flecha blanca señala tu posición y orientación. Este mapa también muestra portones abiertos y cerrados, enemigos, munición, curación, llaves y la salida.
 
 Los símbolos del mapa y la leyenda usan los gráficos del nivel definidos en `TERRAIN` y `OBJECT_ART`. Si añades o modificas un tipo de terreno u objeto visible, actualiza esas definiciones y la prueba. Para un nuevo objeto dinámico, actualiza también el dibujo de los marcadores en el menú de pausa.
 

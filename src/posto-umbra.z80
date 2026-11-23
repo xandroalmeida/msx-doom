@@ -51,7 +51,7 @@ line_y:     equ &f11e
 line_dx:    equ &f120
 line_dy:    equ &f122
 line_count: equ &f124
-menu_state: equ &f125             ; 0 game, 1 legend, 2 map
+menu_state: equ &f125             ; 0 game, otherwise the active pause tab
 campaign_step: equ &f126         ; index in the current campaign
 minimap:    equ &f127             ; user preference for the current session
 effect_timer: equ &f128
@@ -78,6 +78,7 @@ placement_pass: equ &f14e
 display_pending: equ &f14f
 title_phase: equ &f150
 sector_track: equ &f15e
+menu_direction: equ &f15f         ; one tab per horizontal press
 actor_hp:   equ 0
 actor_x:    equ 1
 actor_y:    equ 3
@@ -96,7 +97,7 @@ wall_faces: equ &f1c0
 wall_style: equ &f1e0             ; overlaps the title meters during gameplay
 live_map:   equ &c400             ; 32 cells per page, one page per row
 enemies:    equ live_map+32       ; unused bytes after the first terrain row
-campaign_pool: equ enemies+16*entity_size ; difficulty ranks, after the enemy list
+campaign_ranks: equ enemies+16*entity_size ; selected ranks, after the enemy list
 props:      equ live_map+256+32   ; unused bytes after the second terrain row
 wall_cache: equ live_map+512+32   ; one projected height per terrain row's padding
 frame_size: equ 768

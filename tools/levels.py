@@ -5,7 +5,10 @@ from collections import deque
 from additional_sectors import ADDITIONAL_SECTORS
 
 WIDTH, HEIGHT = 32, 44
-CAMPAIGN_LENGTH = 12
+MAPS_PER_BAND = 3
+# Gate count and range of shortest routes through the mandatory objectives.
+CAMPAIGN_BANDS = ((2, 30, 79), (3, 80, 149), (4, 150, 265), (4, 266, float("inf")))
+CAMPAIGN_LENGTH = MAPS_PER_BAND * len(CAMPAIGN_BANDS)
 TERRAIN_BLOCK_SIZE = 3
 DOORS = "1234"
 KEYS = "abcd"
@@ -154,8 +157,14 @@ def validate(name, rows):
     world = "".join(rows)
     if (len(rows) != HEIGHT or any(len(row) != WIDTH or row[0] != "#" or row[-1] != "#" for row in rows)
             or set(rows[0] + rows[-1]) != {"#"} or set(world) - set("#+." + MARKS)
-            or any(world.count(marker) != 1 for marker in "PE" + DOORS + KEYS)):
+            or any(world.count(marker) != 1 for marker in "PE")):
         raise ValueError(f"Mapa ou marcadores inválidos em {name}.")
+    doors = "".join(door for door in DOORS if door in world)
+    keys = "".join(KEYS[DOORS.index(door)] for door in doors)
+    # Gate 4 always triggers the final navigation or combat hint.
+    if (doors not in ("14", "124", "1234")
+            or any(world.count(mark) != int(mark in doors + keys) for mark in DOORS + KEYS)):
+        raise ValueError(f"Pares de chaves e portões inválidos em {name}.")
 
     def distances(start, closed):
         distance = {start: 0}
@@ -171,12 +180,12 @@ def validate(name, rows):
     current = world.index("P")
     exit_cell = world.index("E")
     minimum = 0
-    for i, (key, door) in enumerate(zip(KEYS, DOORS)):
-        closed = DOORS[i:]
+    for i, (key, door) in enumerate(zip(keys, doors)):
+        closed = doors[i:]
         reachable = distances(current, closed)
         key_cell, gate = world.index(key), world.index(door)
         if (key_cell not in reachable or exit_cell in reachable
-                or any(world.index(later) in reachable for later in KEYS[i + 1:])
+                or any(world.index(later) in reachable for later in keys[i + 1:])
                 or not any(n in reachable for n in (gate - WIDTH, gate + WIDTH, gate - 1, gate + 1))):
             raise ValueError(f"Rota inválida para a chave {i + 1} em {name}.")
         minimum += reachable[key_cell]
@@ -185,8 +194,6 @@ def validate(name, rows):
     if any(cell not in reachable for cell, mark in enumerate(world) if mark not in "#+"):
         raise ValueError(f"Trecho inacessível em {name}.")
     minimum += reachable[exit_cell]
-    if minimum < 220:
-        raise ValueError(f"Rota principal de {name} tem só {minimum} células.")
     return minimum
 
 
@@ -212,6 +219,7 @@ def sector_data(data):
         raise ValueError("Catálogo incompatível com o sorteio da campanha.")
     maps, records, patterns = [], [], {}
     sectors_by_difficulty = {}
+    band_sizes = [0] * len(CAMPAIGN_BANDS)
     geometries = set()
     for index, (name, initial_ammo, track, rows) in enumerate(SECTORS):
         route_length = validate(name, rows)
@@ -249,13 +257,21 @@ def sector_data(data):
         if initial_ammo + ammo_to_collect < shots_needed:
             raise ValueError(f"Munição insuficiente em {name}.")
 
-        # Start from the required route length, then weigh combat and supplies.
-        # Ammo on the floor helps less than ammo already in the weapon.
-        difficulty = route_length + 12 * (shots_needed - initial_ammo) - 3 * ammo_to_collect - 10 * healing
-        if difficulty in sectors_by_difficulty:
-            other = SECTORS[sectors_by_difficulty[difficulty]][0]
+        gate_count = sum(kind == 3 for _, _, kind, _ in props)
+        for band, (gates, shortest, longest) in enumerate(CAMPAIGN_BANDS):
+            if gate_count == gates and shortest <= route_length <= longest:
+                band_sizes[band] += 1
+                break
+        else:
+            raise ValueError(f"{name} não se encaixa na progressão: {gate_count} portões, rota de {route_length} células.")
+
+        # Route length drives the navigation curve. Combat and supplies break ties.
+        pressure = 12 * (shots_needed - initial_ammo) - 3 * ammo_to_collect - 10 * healing
+        rank = (route_length, pressure)
+        if rank in sectors_by_difficulty:
+            other = SECTORS[sectors_by_difficulty[rank]][0]
             raise ValueError(f"Dificuldade empatada em {name} e {other}.")
-        sectors_by_difficulty[difficulty] = index
+        sectors_by_difficulty[rank] = index
 
         map_label = f"sector_map_{index}"
         packed = pack_terrain(rows, patterns)
@@ -273,12 +289,16 @@ def sector_data(data):
         )
     if len(patterns) > 256:
         raise ValueError("Dicionário de terreno excede 256 blocos.")
+    if any(not MAPS_PER_BAND <= count <= 8 for count in band_sizes):
+        raise ValueError(f"Cada faixa precisa de {MAPS_PER_BAND} a 8 mapas. Encontrados: {band_sizes}.")
     dictionary = data("terrain_blocks", (row for block in patterns for row in block))
     pointers = data("sector_records", (f"sector_{i}" for i in range(len(SECTORS))), "dw")
     difficulty_order = data("sector_difficulty_order", (
         sectors_by_difficulty[score] for score in sorted(sectors_by_difficulty)
     ))
+    progression = data("sector_band_sizes", band_sizes)
     return "\n".join((f"map_width: equ {WIDTH}", f"map_height: equ {HEIGHT}",
-                      f"sector_count: equ {len(SECTORS)}", f"campaign_length: equ {CAMPAIGN_LENGTH}",
+                      f"campaign_length: equ {CAMPAIGN_LENGTH}",
+                      f"campaign_band_count: equ {len(band_sizes)}", f"maps_per_band: equ {MAPS_PER_BAND}",
                       f"terrain_block_size: equ {TERRAIN_BLOCK_SIZE}",
-                      pointers, difficulty_order, *records, dictionary, *maps))
+                      pointers, difficulty_order, progression, *records, dictionary, *maps))
