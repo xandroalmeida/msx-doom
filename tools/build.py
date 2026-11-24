@@ -7,6 +7,7 @@ import subprocess
 import sys
 
 from levels import sector_data
+from ending import ending_data
 from opening import score_data
 from music import gameplay_score
 from tables import FONT, data, generate
@@ -26,10 +27,10 @@ def main():
     source = output / "posto-umbra.generated.z80"
     modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80", "campaign.z80", "opening.z80")
     assembly = "\n".join((ROOT / "src" / module).read_text() for module in modules)
-    late_modules = ("compass.z80", "mission.z80")
+    late_modules = ("compass.z80", "mission.z80", "ending.z80")
     late_assembly = "\n".join((ROOT / "src" / module).read_text() for module in late_modules)
     music = (ROOT / "src" / "music.z80").read_text()
-    source.write_text("\n".join((assembly, generate(), late_assembly, score_data(), title_data(data, FONT),
+    source.write_text("\n".join((assembly, generate(), late_assembly, score_data(), ending_data(), title_data(data, FONT),
                                  music, gameplay_score(), sector_data(data), "rom_end:\n")))
     binary = output / "posto-umbra.bin"
     assembler = [args.assembler]

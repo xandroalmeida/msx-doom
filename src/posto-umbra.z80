@@ -19,6 +19,7 @@ BDRCLR:    equ &f3eb
 RG7SAV:    equ &f3e6
 
 frame:      equ &c080             ; complete name table, 32 x 24 tiles
+unpack_buffer: equ &e400          ; terrain rows 32+, reloaded with each sector
 view:       equ &c100             ; aligned 16-row center of the scene
 state_page: equ &f100
 player_x:   equ &f100             ; unsigned 8.8 world coordinates
@@ -308,34 +309,28 @@ load_title_video:
     ld (title_phase),a
     ld hl,title_patterns_0
     ld de,&0000
-    ld bc,title_bank_0_size
-    call LDIRVM
+    call upload_packed
     ld hl,title_colors_0
     ld de,&2000
-    ld bc,title_bank_0_size
-    call LDIRVM
+    call upload_packed
     ld hl,title_patterns_1
     ld de,&0800
-    ld bc,title_bank_1_size
-    call LDIRVM
+    call upload_packed
     ld hl,title_colors_1
     ld de,&2800
-    ld bc,title_bank_1_size
-    jp LDIRVM
+    jp upload_packed
 
 load_game_video:
     ld hl,tile_patterns
     ld de,&0000
-    call upload_tile_bank
-    ld hl,tile_patterns
+    call upload_packed
     ld de,&0800
-    call upload_tile_bank
+    call upload_unpacked
     ld hl,tile_colors
     ld de,&2000
-    call upload_tile_bank
-    ld hl,tile_colors
+    call upload_packed
     ld de,&2800
-    call upload_tile_bank
+    call upload_unpacked
     ld hl,compass_patterns
     ld de,compass_vram
     ld bc,compass_art_bytes
@@ -356,9 +351,75 @@ blank_for_scene_change:
     ld (display_pending),a
     ret
 
-upload_tile_bank:
-    ld bc,tile_patterns_end-tile_patterns
+; Repeat the last unpacked tile bank at DE.
+upload_unpacked:
+    ld hl,unpack_buffer
+    ld bc,tile_bank_bytes
     jp LDIRVM
+
+upload_tile_bank:
+; HL = packed data (see tools/pack.py), DE = VRAM address.
+upload_packed:
+    push de
+    ld de,unpack_buffer
+    call unpack
+    ex de,hl
+    ld de,unpack_buffer
+    or a
+    sbc hl,de
+    ld b,h
+    ld c,l
+    pop de
+    ld hl,unpack_buffer
+    jp LDIRVM
+
+; HL = packed stream, DE = destination. Matches copy from the output so far.
+unpack:
+    ld a,(hl)
+    inc hl
+    or a
+    ret z
+    jp m,unpack_match
+    ld c,a
+    ld b,0
+    ldir
+    jr unpack
+unpack_match:
+    ld b,a
+    and 7
+    ld c,(hl)
+    inc hl
+    push hl
+    ld h,a
+    ld l,c                         ; HL = distance - 1
+    ld a,b
+    rrca
+    rrca
+    rrca
+    and 15
+    add a,3
+    ld c,a
+    ld b,0
+    cp 18                          ; the longest code reads an extra length byte
+    jr nz,unpack_copy
+    ex (sp),hl
+    ld a,(hl)
+    inc hl
+    ex (sp),hl
+    add a,c
+    ld c,a
+    adc a,b
+    sub c
+    ld b,a
+unpack_copy:
+    push de
+    ex de,hl
+    scf
+    sbc hl,de                      ; source = destination - distance
+    pop de
+    ldir
+    pop hl
+    jr unpack
 
 upload_slopes:
     ld hl,slope_uploads

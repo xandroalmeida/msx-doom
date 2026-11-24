@@ -1,4 +1,4 @@
-"""Sinal de Umbra, an original title theme in 7/8 for the MSX PSG."""
+"""Sinal de Umbra, the 7/8 title theme, and Voz na Serra, the ending theme, for the MSX PSG."""
 
 from tables import data
 
@@ -69,32 +69,79 @@ def psg_period(note):
     return period
 
 
+# Voz na Serra plays after the last sector: the minor signal resolved in E major.
+# Bars have sixteen steps. A dash holds the previous pitch at a lower volume.
+ENDING_CHORDS = {
+    "E": ("E4 G#4 B4 G#4", "E2 . E3 ."),
+    "B": ("B3 D#4 F#4 D#4", "B1 . B2 ."),
+    "C#m": ("C#4 E4 G#4 E4", "C#2 . C#3 ."),
+    "A": ("A3 C#4 E4 C#4", "A1 . A2 ."),
+}
+ENDING_DRUMS = "12 .  05 .  08 .  05 .  12 .  12 .  08 .  05 05"
+ENDING_BARS = (
+    ("E", "G#4 - - -  B4 - - -  E5 - - -  - - - -"),
+    ("B", "D#5 - - -  C#5 - - -  B4 - - -  - - - -"),
+    ("C#m", "C#5 - - -  E5 - - -  G#5 - - -  F#5 - - -"),
+    ("A", "E5 - - -  - - - -  C#5 - - -  B4 - - -"),
+    ("A", "C#5 - - -  E5 - - -  A5 - - -  - - - -"),
+    ("B", "G#5 - - -  F#5 - - -  D#5 - - -  F#5 - - -"),
+)
+ENDING_ORDER = (0, 1, 2, 3, 0, 1, 4, 5)
+ENDING_STEPS = 8                   # each bar is stored as two shared half bars
+HOLD = 0xFF
+
+
 def score_data():
     periods = [0]
     notes = {".": 0}
 
     def note_id(note):
+        if note == "-":
+            return HOLD
         if note not in notes:
             notes[note] = len(periods)
             periods.append(psg_period(note))
         return notes[note]
 
-    patterns = []
-    for index, pattern in enumerate(PATTERNS):
-        tracks = [line.split() for line in pattern]
-        if any(len(track) != STEPS_PER_BAR for track in tracks):
-            raise ValueError(f"Compasso incompleto na abertura: {index}")
-        events = []
+    def events(lines, label):
+        tracks = [line.split() for line in lines]
+        if len({len(track) for track in tracks}) != 1:
+            raise ValueError(f"Compasso incompleto: {label}")
+        values = []
         for lead, harmony, bass, drums in zip(*tracks):
             noise = 0 if drums == "." else int(drums, 16)
             if not 0 <= noise <= 31:
                 raise ValueError(f"Período de ruído inválido: {drums}")
-            events.extend((note_id(lead), note_id(harmony), note_id(bass), noise))
-        patterns.append(data(f"intro_pattern_{index}", events))
+            values.extend((note_id(lead), note_id(harmony), note_id(bass), noise))
+        return values
+
+    patterns = []
+    for index, pattern in enumerate(PATTERNS):
+        values = events(pattern, f"abertura {index}")
+        if len(values) != 4 * STEPS_PER_BAR:
+            raise ValueError(f"Compasso incompleto na abertura: {index}")
+        patterns.append(data(f"intro_pattern_{index}", values))
+
+    halves, ending_order = {}, []
+    for bar in ENDING_ORDER:
+        chord, lead = ENDING_BARS[bar]
+        harmony, bass = ENDING_CHORDS[chord]
+        values = events((lead, " ".join([harmony] * 4), " ".join([bass] * 4), ENDING_DRUMS), f"final {bar}")
+        if len(values) != 8 * ENDING_STEPS:
+            raise ValueError(f"O compasso final {bar} deve ter 16 passos.")
+        for start in range(0, len(values), 4 * ENDING_STEPS):
+            half = tuple(values[start:start + 4 * ENDING_STEPS])
+            ending_order.append(halves.setdefault(half, f"ending_pattern_{len(halves)}"))
+    if len(periods) >= HOLD:
+        raise ValueError("Notas demais para a tabela de períodos.")
 
     return "\n".join((
         f"intro_bar_steps: equ {STEPS_PER_BAR}",
+        f"ending_bar_steps: equ {ENDING_STEPS}",
+        f"intro_hold: equ {HOLD}",
         data("intro_order", [*(f"intro_pattern_{index}" for index in ORDER), 0], "dw"),
+        data("ending_order", [*ending_order, 0], "dw"),
         data("intro_periods", periods, "dw"),
         *patterns,
+        *(data(label, half) for half, label in halves.items()),
     ))

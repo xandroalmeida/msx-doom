@@ -108,6 +108,8 @@ current_buttons:
     ld a,(outcome)
     cp 4
     jp z,title_tick
+    cp 3
+    jp z,ending_tick
     ld a,(pressed)
     bit 2,a
     jp nz,toggle_menu

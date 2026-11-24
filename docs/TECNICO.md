@@ -63,7 +63,8 @@ Os argumentos opcionais abaixo geram capturas PPM e a gravação do PSG em WAV.
 ```sh
 node tests/webmsx.cjs build/wmsx.js \
   build/combate.ppm build/legenda.ppm build/mapa.ppm build/final.ppm \
-  build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm
+  build/sinal-de-umbra.wav build/titulo.ppm build/vida.ppm build/dano.ppm \
+  build/creditos.ppm build/voz-na-serra.wav
 ```
 
 A suíte roda a 50 e 60 Hz e cobre a abertura, o áudio, os controles, as três dificuldades, os 21 mapas, a progressão da campanha e o bloqueio da saída enquanto houver inimigos. Os testes de navegação percorrem as fases com os inimigos marcados como derrotados. Uma arena separada exercita o combate e a regra de eliminação. A validação em um MSX1 físico está pendente. [Núcleo C-BIOS usado nos testes](https://github.com/ppeccin/WebMSX/blob/master/release/stable/6.0/cbios/embedded/wmsx.js)
@@ -77,6 +78,7 @@ A suíte roda a 50 e 60 Hz e cobre a abertura, o áudio, os controles, as três 
 | Combate, portões e condição da missão | [combat.z80](../src/combat.z80), [mission.z80](../src/mission.z80) |
 | Projeção, HUD, bússola e abas da pausa | [objects.z80](../src/objects.z80), [compass.z80](../src/compass.z80), [menu.z80](../src/menu.z80) |
 | Arte e música da abertura | [title_art.py](../tools/title_art.py), [opening.py](../tools/opening.py), [opening.z80](../src/opening.z80) |
+| Rádio, diálogo, créditos e tema do final | [ending.py](../tools/ending.py), [ending_art.py](../tools/ending_art.py), [ending.z80](../src/ending.z80), [opening.py](../tools/opening.py) |
 | Partituras e reprodução na campanha | [music.py](../tools/music.py), [music.z80](../src/music.z80) |
 | Geometria, validação de rotas e tabelas | [levels.py](../tools/levels.py), [additional_sectors.py](../tools/additional_sectors.py), [tables.py](../tools/tables.py) |
 | Build e regressão em emulador | [build.py](../tools/build.py), [webmsx.cjs](../tests/webmsx.cjs) |
@@ -93,4 +95,4 @@ Os símbolos do mapa e da legenda vêm de `TERRAIN` e `OBJECT_ART` em `tables.py
 
 ### Vídeo e áudio
 
-O renderizador calcula 32 raios para 64 direções da câmera. As tabelas de nomes alternam entre `1800h` e `1C00h` na VRAM a cada quadro apresentado. O áudio da campanha reutiliza compassos idênticos e um dicionário de valores de frequência e volume. O plano detalha o orçamento de RAM e ROM, as rotinas de vídeo e os resultados de validação. [Plano e orçamento](../PLAN.md)
+Os tiles do jogo, a arte da abertura e os bancos do final ficam compactados na ROM pelo formato de [pack.py](../tools/pack.py). O cartucho os descompacta numa área de RAM do mapa, recarregada a cada setor, e envia o resultado à VRAM com a tela apagada. O renderizador calcula 32 raios para 64 direções da câmera. As tabelas de nomes alternam entre `1800h` e `1C00h` na VRAM a cada quadro apresentado. O áudio da campanha reutiliza compassos idênticos e um dicionário de valores de frequência e volume. O plano detalha o orçamento de RAM e ROM, as rotinas de vídeo e os resultados de validação. [Plano e orçamento](../PLAN.md)

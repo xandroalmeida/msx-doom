@@ -355,8 +355,6 @@ campaign_action:
     bit 0,a
     ret z
     ld a,(outcome)
-    cp 3
-    jr z,campaign_restart
     cp 2
     jr nz,load_next
     ld hl,campaign_step
@@ -372,6 +370,7 @@ campaign_restart:
     call clear_damage_feedback
     call blank_for_scene_change
     call load_title_video
+    call restore_text_bank
     call intro_start
     ld a,4
     ld (outcome),a
@@ -483,6 +482,9 @@ stage_exit:
     ld a,2
     jr nz,exit_found
     inc a
+    ld (outcome),a
+    call music_mix                 ; silence the sector's voices
+    jp ending_start
 exit_found:
     ld (outcome),a
     ld e,60
@@ -495,6 +497,8 @@ render_campaign_panel:
     ld a,(outcome)
     cp 4
     jr z,render_title
+    cp 3
+    jp z,ending_render
     dec a
     add a,a
     ld e,a

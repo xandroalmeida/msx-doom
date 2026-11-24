@@ -1,0 +1,292 @@
+; After the last sector the radio room appears in pixel art. The outpost and
+; command trade messages one at a time over Voz na Serra while the window goes
+; from night to dawn; the credits roll at sunrise.
+ending_clock: equ &f19e           ; game ticks since this page started
+ending_stage: equ &f1a3           ; 0 radio exchange, 1 credits
+ending_left: equ &f1a4            ; characters still allowed on this frame
+ending_speaker: equ &f1a6         ; 0 the outpost transmits, 1 command answers
+ending_talking: equ &f1a7         ; set while a line is being typed
+ending_messages: equ &f1a8        ; messages started so far on this frame
+
+ending_start:
+    call clear_damage_feedback
+    call blank_for_scene_change
+    call load_ending_video
+    xor a
+    ld (ending_stage),a
+    ld (ending_speaker),a
+    call ending_rewind
+    call mark_dirty
+    ld hl,ending_order
+    ld a,ending_bar_steps
+    jp score_start
+
+ending_rewind:
+    ld hl,0
+    ld (ending_clock),hl
+    ret
+
+; The upper bank holds art only; the others hold the font, in three inks.
+load_ending_video:
+    ld hl,ending_bank_0_patterns
+    ld de,&0000
+    call upload_packed
+    ld hl,ending_bank_0_colors
+    ld de,&2000
+    call upload_packed
+    ld hl,ending_bank_1_patterns
+    ld de,&0800
+    call upload_packed
+    ld hl,ending_bank_1_colors
+    ld de,&2800
+    call upload_packed
+    ld hl,ending_bank_2_patterns
+    ld de,&1000
+    call upload_packed
+    ld hl,ending_bank_2_colors
+    ld de,&3000
+    jp upload_packed
+
+; The title draws its text with the game tiles of the lower bank.
+restore_text_bank:
+    ld hl,tile_patterns
+    ld de,&1000
+    call upload_packed
+    ld hl,tile_colors
+    ld de,&3000
+    jp upload_packed
+
+ending_tick:
+    ld hl,(ending_clock)
+    ld a,h
+    cp &40                         ; stop counting long after the text ends
+    jr nc,ending_buttons
+    inc hl
+    ld (ending_clock),hl
+ending_buttons:
+    call mark_dirty
+    ld a,(pressed)
+    rrca
+    ret nc
+    ld de,20                       ; ignore a shot fired as the sector ended
+    or a
+    sbc hl,de
+    ret c
+    ld a,(ending_stage)
+    or a
+    jp nz,campaign_restart
+    inc a
+    ld (ending_stage),a
+    jp ending_rewind
+
+ending_render:
+    ld hl,ending_names
+    ld de,frame
+    ld bc,ending_names_size
+    ldir
+    xor a
+    ld (ending_talking),a
+    ld (ending_messages),a
+    ld a,(ending_stage)
+    or a
+    jr nz,ending_render_credits
+    ld hl,ending_skip
+    call draw_panel
+    ld hl,(ending_clock)
+    ld (ending_left),hl
+    ld hl,ending_dialogue
+    call ending_type
+    jr c,ending_dialogue_scene
+    ld a,1                         ; the exchange ended: roll the credits
+    ld (ending_stage),a
+    call ending_rewind
+ending_dialogue_scene:
+    ld a,(ending_messages)
+    cp 4                           ; dawn breaks for the second half
+    ld b,0
+    jr c,ending_night
+    inc b
+ending_night:
+    ld a,(ending_speaker)
+    inc a
+    ld c,a                         ; lamp 1 is TX, lamp 2 is RX
+
+; B = sky (0 night, 1 dawn, 2 sunrise), C = lamp frame.
+ending_scene:
+    push bc
+    ld a,c
+    ld hl,ending_lamps
+    call ending_animate
+    pop bc
+    push bc
+    ld a,b
+    ld hl,ending_sky
+    call ending_animate
+    pop bc
+    ld a,(ending_clock)
+    rrca
+    rrca
+    rrca
+    and 1
+    sla b
+    or b                           ; the beacon has two frames per sky
+    ld hl,ending_beacon
+    call ending_animate
+    ld a,(ending_talking)
+    or a
+    jr z,ending_trace
+    ld a,(ending_clock)
+    and 3
+    inc a                          ; the trace moves while a line is typed
+ending_trace:
+    push af
+    ld hl,ending_wave
+    call ending_animate
+    pop af
+    or a
+    jr z,ending_lips
+    ld a,(ending_speaker)
+    or a
+    ld a,0
+    jr nz,ending_lips              ; only the operator's lips move
+    ld a,(ending_clock)
+    rrca
+    and 1
+ending_lips:
+    ld hl,ending_mouth
+    jr ending_animate
+
+ending_render_credits:
+    ld hl,(ending_clock)
+    add hl,hl                      ; the credits type twice as fast
+    ld (ending_left),hl
+    ld hl,ending_credits
+    call ending_type
+    xor a
+    ld (ending_talking),a
+    ld bc,&0200                    ; sunrise, both lamps off
+    jr ending_scene
+
+; HL = channel: cell count, frame offsets, then a name per cell for each frame.
+; A = frame.
+ending_animate:
+    ld c,(hl)
+    inc hl
+    ld b,0
+    push hl
+    add hl,bc
+    add hl,bc
+    or a
+    jr z,ending_frame
+ending_next_frame:
+    add hl,bc
+    dec a
+    jr nz,ending_next_frame
+ending_frame:
+    ex de,hl
+    pop hl
+    ld b,c
+ending_cell:
+    push bc
+    ld c,(hl)
+    inc hl
+    ld b,(hl)
+    inc hl
+    push hl
+    ld hl,frame
+    add hl,bc
+    ld a,(de)
+    inc de
+    ld (hl),a
+    pop hl
+    pop bc
+    djnz ending_cell
+    ret
+
+; HL = script of text blocks and pauses. CF while text is still being typed.
+ending_type:
+    ld a,(hl)
+    or a
+    ret z
+    inc hl
+    cp &fe
+    jr nc,ending_message
+    ld c,a
+    ld b,0
+    bit 7,a
+    jr z,ending_line
+    res 7,c                        ; a pause spends time without drawing
+    call ending_spend
+    ret c
+    jr ending_type
+; FEh starts a message from the outpost and FFh one from command.
+ending_message:
+    and 1
+    ld (ending_speaker),a
+    ld de,ending_messages
+    ex de,hl
+    inc (hl)
+    ex de,hl
+    push hl
+    add a,a
+    ld e,a
+    ld d,0
+    ld hl,ending_labels
+    add hl,de
+    ld a,(hl)
+    inc hl
+    ld h,(hl)
+    ld l,a
+    push hl
+    ld hl,frame+ending_text_top
+    ld de,frame+ending_text_top+1
+    ld bc,ending_text_size-1
+    ld (hl),0
+    ldir
+    pop hl
+    call draw_panel
+    pop hl
+    jr ending_type
+ending_line:
+    ld e,(hl)
+    inc hl
+    ld a,(hl)
+    inc hl
+    add a,view/256
+    ld d,a
+    call ending_spend
+    push af
+    ld a,b
+    or c
+    jr z,ending_line_drawn
+    ldir
+ending_line_drawn:
+    pop af
+    jr nc,ending_type
+    ld a,1                         ; a line is being typed right now
+    ld (ending_talking),a
+    ld a,(ending_clock)
+    and 4
+    jr z,ending_typing
+    ld a,ending_cursor
+    ld (de),a
+ending_typing:
+    scf
+    ret
+
+; BC = cost. Returns in BC the part that fits, with CF when time runs out.
+ending_spend:
+    push hl
+    ld hl,(ending_left)
+    or a
+    sbc hl,bc
+    jr nc,ending_spent
+    add hl,bc
+    ld b,h
+    ld c,l
+    ld hl,0
+    scf
+ending_spent:
+    ld (ending_left),hl
+    pop hl
+    ret

@@ -4,9 +4,10 @@ const { readFileSync, writeFileSync } = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-const [, , emulatorPath, snapshotPath, legendPath, mapPath, endingPath, openingPath, titlePath, healthPath, damagePath] = process.argv;
+const [, , emulatorPath, snapshotPath, legendPath, mapPath, endingPath, openingPath, titlePath, healthPath, damagePath,
+    creditsPath, endingMusicPath] = process.argv;
 if (!emulatorPath) {
-    console.error("Uso: node tests/webmsx.cjs wmsx.js [combate.ppm] [legenda.ppm] [mapa.ppm] [final.ppm] [abertura.wav] [titulo.ppm] [vida.ppm] [dano.ppm]");
+    console.error("Uso: node tests/webmsx.cjs wmsx.js [combate.ppm] [legenda.ppm] [mapa.ppm] [final.ppm] [abertura.wav] [titulo.ppm] [vida.ppm] [dano.ppm] [creditos.ppm] [voz-na-serra.wav]");
     process.exit(1);
 }
 
@@ -25,6 +26,25 @@ function romAddress(label) {
 function romTiles(label, length) {
     const offset = romAddress(label) - 0x4000;
     return cartridge.subarray(offset, offset + length);
+}
+// Mirrors tools/pack.py: literal runs and matches up to 2 KiB back.
+function romPacked(label) {
+    const packed = romTiles(label, 0x8000);
+    const out = [];
+    for (let i = 0; packed[i];) {
+        const token = packed[i];
+        if (token < 0x80) {
+            out.push(...packed.subarray(i + 1, i + 1 + token));
+            i += 1 + token;
+            continue;
+        }
+        const distance = ((token & 7) << 8 | packed[i + 1]) + 1;
+        let length = ((token >> 3) & 15) + 3;
+        i += 2;
+        if (length === 18) length += packed[i++];
+        for (let n = 0; n < length; n++) out.push(out[out.length - distance]);
+    }
+    return Buffer.from(out);
 }
 const creatureTiles = new Set(romTiles("creature_tiles", 30));
 creatureTiles.delete(0);
@@ -216,10 +236,10 @@ function checkTitleArt(demo) {
     for (let bank = 0; bank < 2; bank++) {
         const patterns = `title_patterns_${bank}`;
         const colors = `title_colors_${bank}`;
-        const size = romAddress(colors) - romAddress(patterns);
         const offset = bank * 0x800;
-        const expectedPatterns = Buffer.from(romTiles(patterns, size));
-        const expectedColors = Buffer.from(romTiles(colors, size));
+        const expectedPatterns = romPacked(patterns);
+        const expectedColors = romPacked(colors);
+        const size = expectedPatterns.length;
         for (let i = 0; i < motion.length; i += 18) {
             if (motion[i + 1] !== bank * 8) continue;
             const tile = motion[i] * 8;
@@ -324,6 +344,8 @@ function installEntities(demo, base, end, records) {
 }
 
 function emptyRoom(demo) {
+    // Shrink the lists with the game paused, never in the middle of its enemy loop.
+    press(demo, "menu", true);
     for (let y = 0; y < height; y++) {
         for (let x = 0; x < width; x++) {
             demo.write(mapAddress(x, y), x > 0 && x < 15 && y > 0 && y < 15 ? 0 : 1);
@@ -331,6 +353,7 @@ function emptyRoom(demo) {
     }
     installEntities(demo, state.enemies, state.enemyEnd, [[25, 25, 0, 2]]);
     installEntities(demo, state.props, state.propEnd, [[25, 25, 0, 6]]);
+    press(demo, "menu", true);
 }
 
 function creatureTileCount(demo) {
@@ -592,6 +615,87 @@ function capturePsg(demo, frames, frequency) {
             writeFileSync(filename, Buffer.concat([header, pcm.subarray(0, length)]));
         },
     };
+}
+
+// The ending shows the radio room and types the exchange one message at a time.
+function checkEnding(demo, frequency) {
+    const ending = { clock: 0xf19e, stage: 0xf1a3 };
+    const word = (address) => demo.read(address) | (demo.read(address + 1) << 8);
+    const psg = () => Buffer.from(demo.machine.psg.saveState().r, "base64");
+    const blank = Buffer.alloc(32);
+    // The renderer walks the whole script each frame, so sample the presented page.
+    const shown = (index) => {
+        const { regs, vram } = demo.video();
+        const base = (regs[2] << 10) + index * 32;
+        return Buffer.from(vram.subarray(base, base + 32));
+    };
+    const labelTx = romTiles("ending_label_tx", 4)[3];
+    const shownSpeaker = () => {
+        const first = shown(13)[2];
+        return first === labelTx ? 0 : first ? 1 : -1;
+    };
+    assert.equal(demo.read(state.outcome), 3);
+    assert.equal(demo.read(ending.stage), 0);
+    const { vram } = demo.video();
+    for (const [bank, base] of [[0, 0], [1, 0x800], [2, 0x1000]]) {
+        for (const [part, offset] of [["patterns", 0], ["colors", 0x2000]]) {
+            const expected = romPacked(`ending_bank_${bank}_${part}`);
+            assert.deepEqual(vram.subarray(base + offset, base + offset + expected.length), expected,
+                "A arte e a fonte do final devem ocupar os três bancos.");
+        }
+    }
+    const endingOrder = romAddress("ending_order");
+    const orderPosition = () => word(0xf130) - endingOrder;
+    assert.ok(orderPosition() > 0 && orderPosition() < 40, "A trilha do final deve tocar ao chegar ao rádio.");
+    assert.equal(demo.read(0xf1a2), 8);
+
+    // An early Space press, such as a last shot, must not skip the transmission.
+    press(demo, "keys", space);
+    assert.equal(demo.read(ending.stage), 0);
+    assert.notDeepEqual(shown(15), blank, "A primeira mensagem deve começar a ser digitada.");
+    const night = shown(3);
+    assert.notDeepEqual(night, blank, "A arte do rádio deve aparecer acima da conversa.");
+
+    const recorder = frequency === 60 && endingMusicPath ? capturePsg(demo, 30 * frequency, frequency) : null;
+    let heardAllChannels = false;
+    let saved = false;
+    const speakers = [shownSpeaker()];
+    const scopes = new Set();
+    for (let i = 0; i < 120 * frequency && demo.read(ending.stage) === 0; i++) {
+        demo.run(1);
+        if (recorder && i < 30 * frequency) recorder.readFrame();
+        const registers = psg();
+        heardAllChannels ||= registers[8] > 0 && registers[9] > 0 && registers[10] > 0;
+        scopes.add(shown(4).subarray(20, 26).toString("hex"));
+        const speaker = shownSpeaker();
+        if (speaker >= 0 && speaker !== speakers.at(-1) && demo.read(ending.stage) === 0) {
+            speakers.push(speaker);
+            assert.ok(shown(17).equals(blank) && shown(19).equals(blank), "Cada mensagem deve aparecer sozinha.");
+        }
+        if (!saved && speakers.length === 3 && !shown(19).equals(blank)) {
+            demo.run(frequency / 2);
+            checkVideo(demo);
+            if (frequency === 60 && endingPath) saveFrame(demo.frame, endingPath);
+            saved = true;
+        }
+    }
+    if (recorder) recorder.save(endingMusicPath);
+    assert.deepEqual(speakers, [0, 1, 0, 1, 0, 1], "O posto e a central devem falar alternadamente.");
+    assert.ok(saved && heardAllChannels, "O rádio deve completar a conversa com a música nos três canais.");
+    assert.ok(scopes.size > 3, "O osciloscópio deve se mover enquanto as mensagens são digitadas.");
+    assert.equal(demo.read(ending.stage), 1, "Os créditos devem seguir a conversa.");
+    assert.equal(demo.read(state.outcome), 3);
+
+    for (let i = 0; i < 30 * frequency && (shown(21).equals(blank) || shown(23).equals(blank)); i++) demo.run(1);
+    assert.notDeepEqual(shown(23), blank, "Os créditos devem terminar com a instrução de retorno.");
+    assert.notDeepEqual(shown(3), night, "O céu da janela deve amanhecer nos créditos.");
+    demo.run(frequency);
+    checkVideo(demo);
+    if (frequency === 60 && creditsPath) saveFrame(demo.frame, creditsPath);
+    demo.write(state.eventTimer, 20);
+    demo.write(state.flash, 20);
+    press(demo, "keys", space);
+    console.log(`Final em ${frequency} Hz: sala de rádio animada, seis mensagens alternadas, créditos e música OK.`);
 }
 
 function checkOpening(frequency) {
@@ -1367,19 +1471,22 @@ function playCampaign(frequency) {
         console.log(`Fase ${step + 1}/${campaignLength}, mapa ${id + 1}, ${frequency} Hz: ${seconds.toFixed(1)} s de rota guiada sem combate.`);
         demo.run(12);
         checkVideo(demo);
-        if (finalStep) {
-            if (frequency === 60 && endingPath) saveFrame(demo.frame, endingPath);
-            demo.write(state.eventTimer, 20);
-            demo.write(state.flash, 20);
-        }
-        press(demo, "keys", space);
+        if (finalStep) checkEnding(demo, frequency);
+        else press(demo, "keys", space);
     }
     assert.equal(tracksChecked.size, 3);
     assert.equal(demo.read(state.outcome), 4);
     assert.equal(demo.read(state.eventTimer), 0);
     assert.equal(demo.read(state.flash), 0);
     checkTitleArt(demo);
+    const { vram } = demo.video();
+    const textPatterns = romPacked("tile_patterns");
+    assert.deepEqual(vram.subarray(0x1000, 0x1000 + textPatterns.length), textPatterns,
+        "O título deve recuperar os tiles de texto depois do final.");
+    const textColors = romPacked("tile_colors");
+    assert.deepEqual(vram.subarray(0x3000, 0x3000 + textColors.length), textColors);
     press(demo, "keys", space);
+    demo.run(12); // the sector's tile banks are unpacked with the screen off
     assert.notDeepEqual(campaignOrder(demo), order);
     checkSector(demo, 0, difficulty);
 }

@@ -13,8 +13,18 @@ intro_vol_b: equ &f137
 intro_vol_c: equ &f138
 intro_drum:  equ &f139
 intro_meter: equ &f1e8             ; 24 bytes, above the game object queue
+intro_loop: equ &f1a0              ; first bar of the playing score
+intro_steps: equ &f1a2             ; steps in each stored bar
+
+; The title theme and the ending theme share this player and its note table.
 
 intro_start:
+    ld hl,intro_order
+    ld a,intro_bar_steps
+score_start:
+    ld (intro_loop),hl
+    ld (intro_order_position),hl
+    ld (intro_steps),a
     ld a,(IDBYT1)
     add a,a                       ; bit 7 marks the 50 Hz BIOS
     ld a,5
@@ -31,8 +41,6 @@ intro_start:
     ld (flash),a
     ld (intro_phase),a
     ld (intro_left),a
-    ld hl,intro_order
-    ld (intro_order_position),hl
     jp intro_play_step
 
 intro_stop:
@@ -48,8 +56,8 @@ intro_stop:
 
 intro_tick:
     ld a,(outcome)
-    cp 4
-    ret nz
+    cp 3                           ; the ending (3) and the title (4) own the PSG
+    ret c
     ld a,(JIFFY)
     ld c,a
     ld hl,intro_last
@@ -62,6 +70,9 @@ intro_catch_up:
     call intro_advance
     pop bc
     djnz intro_catch_up
+    ld a,(outcome)
+    cp 4
+    ret nz
     jp animate_title
 
 ; Updating tile art keeps the illustration's name table and UI independent.
@@ -133,12 +144,12 @@ intro_read_order:
     ld a,d
     or e
     jr nz,intro_pattern_ready
-    ld hl,intro_order
+    ld hl,(intro_loop)
     jr intro_read_order
 intro_pattern_ready:
     ld (intro_order_position),hl
     ld (intro_score_position),de
-    ld a,intro_bar_steps
+    ld a,(intro_steps)
     ld (intro_left),a
     ret
 
@@ -229,6 +240,8 @@ intro_release_voice:
 intro_pitch:
     or a
     ret z
+    cp intro_hold
+    jr z,intro_hold_pitch
     push hl
     add a,a
     ld e,a
@@ -244,6 +257,10 @@ intro_pitch:
     call write_psg
     pop hl
     ld a,b
+    ret
+intro_hold_pitch:                  ; keep the period and sustain more softly
+    ld a,b
+    sub 3
     ret
 
 intro_mixer:

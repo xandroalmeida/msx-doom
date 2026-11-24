@@ -1,5 +1,6 @@
 """Original pixel art for the Posto Umbra title, packed into SCREEN 2 tiles."""
 
+from pack import pack
 from collections import Counter
 from itertools import combinations
 
@@ -231,8 +232,8 @@ def title_data(data, font):
                 layout.append(index)
         sections.extend((
             f"title_bank_{bank}_size: equ {len(patterns)}",
-            data(f"title_patterns_{bank}", patterns),
-            data(f"title_colors_{bank}", colors),
+            data(f"title_patterns_{bank}", pack(patterns)),
+            data(f"title_colors_{bank}", pack(colors)),
         ))
     frame_labels = [f"title_motion_{phase}" for phase in range(len(frames))]
     return "\n".join((

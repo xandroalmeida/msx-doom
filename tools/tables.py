@@ -1,5 +1,6 @@
 """Generate the original map, camera and SCREEN 2 tiles at build time."""
 
+from pack import pack
 from itertools import groupby
 from math import cos, pi, sin
 
@@ -545,7 +546,6 @@ def generate():
     campaign_panels = (
         story_panel("death_panel", "VOCE CAIU", "O SETOR AINDA ESTA TOMADO", "ESP TENTAR DE NOVO", 9),
         story_panel("clear_panel", "SETOR SEGURO", "A ROTA ESTA LIVRE", "ESP PROXIMO SETOR", 7),
-        story_panel("last_panel", "POSTO RECUPERADO", "CAMPANHA CONCLUIDA", "ESP VOLTAR AO INICIO", 7),
     )
     title_panel = panel("title_panel", [
         (12, 9, label("SINAL DE UMBRA", 15)),
@@ -610,9 +610,10 @@ def generate():
             ))
 
     return "\n".join((
-        data("tile_patterns", patterns),
-        "tile_patterns_end:",
-        data("tile_colors", colors),
+        # Both tables are packed and unpacked into RAM before each upload.
+        f"tile_bank_bytes: equ {len(patterns)}",
+        data("tile_patterns", pack(patterns)),
+        data("tile_colors", pack(colors)),
         f"ceiling_tile: equ {ceiling_tile}",
         f"floor_tile: equ {floor_tile}",
         data("walk_vectors", walk_vectors, "dw"),
@@ -651,7 +652,7 @@ def generate():
         *campaign_panels,
         title_panel,
         data("difficulty_names", difficulty_names),
-        data("campaign_panels", ("death_panel", "clear_panel", "last_panel"), "dw"),
+        data("campaign_panels", ("death_panel", "clear_panel"), "dw"),
         legend_panel,
         controls_panel,
         data("map_hud", map_hud),

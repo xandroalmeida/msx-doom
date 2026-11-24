@@ -26,6 +26,7 @@ Sua missão é recuperar o posto. Abra caminho, elimine todos os inimigos de cad
 - **Três dificuldades.** Fácil tem 8 a 10 inimigos por setor e dá mais tempo entre ataques. Normal, a seleção inicial, tem 11 a 13. Difícil tem 14 a 16, com perseguição mais rápida e detecção a maior distância.
 - **Duas armas.** A pistola gasta uma carga e alcança alvos distantes. A arma de pulso gasta duas e causa dois pontos de dano a curta distância. Caixas amarelas dão oito cargas e corações restauram até dois pontos de vida. Os brutos roxos resistem a mais disparos.
 - **Objetivos.** Recolha as chaves, abra os portões e elimine todos os inimigos antes de sair. Se houver sobreviventes ao abrir o último portão ou chegar à saída, o HUD mostra **MATE TODOS**. Uma nova campanha sorteia os mapas e as posições dos inimigos e itens. Reiniciar uma fase preserva a distribuição e repõe vida e munição.
+- **Final.** Ao recuperar o último setor, o posto volta a transmitir. Na sala de rádio, o posto e a central trocam mensagens, uma de cada vez, ao som de **Voz na Serra**. Depois vêm os créditos. Espaço pula a conversa e, nos créditos, volta ao título.
 
 ### Como jogar
 
@@ -50,7 +51,7 @@ Use o arquivo `posto-umbra.rom` no seu MSX1 ou em um emulador. [Abrir o WebMSX n
 
 A bússola aponta na direção da mira. O minimapa mostra o terreno ao redor e uma seta indica sua posição. Na pausa, a seta para a direita abre a **Legenda** e mais um toque abre **Comandos**. O mapa de pausa mostra também inimigos, chaves, suprimentos, portões e a saída.
 
-O tema **Sinal de Umbra** toca na abertura. Os setores usam **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro**. O controle de música silencia a trilha da campanha e os efeitos sonoros continuam ativos.
+O tema **Sinal de Umbra** toca na abertura. Os setores usam **Ecos do Depósito**, **Forja Vermelha** e **Núcleo de Vidro**, e **Voz na Serra** acompanha o final. O controle de música silencia a trilha da campanha e os efeitos sonoros continuam ativos.
 
 ## English
 
@@ -70,6 +71,7 @@ Your mission is to reclaim the outpost. Open the gates, clear each sector of ene
 - **Three difficulty levels.** Easy has 8–10 enemies per sector and longer gaps between attacks. Normal is the default and has 11–13. Hard has 14–16, with faster pursuit and longer detection range.
 - **Two weapons.** The long-range pistol spends one round. The short-range pulse gun spends two rounds to deal two damage. Yellow boxes give eight rounds, hearts restore up to two health points, and purple brutes can take more hits.
 - **Objectives.** Find the keys, open the gates and defeat every enemy before leaving. **MATE TODOS** means enemies are still alive. New campaigns reshuffle maps and positions. Retrying a sector restores health and ammo and keeps its layout.
+- **Ending.** After the last sector the outpost transmits again. In the radio room, the outpost and command trade messages one at a time over **Voz na Serra**. The credits follow. Space skips the exchange and, on the credits, returns to the title.
 
 ### How to play
 
@@ -94,7 +96,7 @@ Load `posto-umbra.rom` on an MSX1 or in an emulator. [Open WebMSX in MSX1 mode w
 
 The compass follows your aim, and the minimap shows nearby terrain and your position. From the pause map, press right for the **Legenda** (legend) and right again for **Comandos** (controls). The pause map also shows enemies, keys, supplies, gates and the exit.
 
-**Sinal de Umbra** plays on the title screen. The sectors use **Ecos do Depósito**, **Forja Vermelha** and **Núcleo de Vidro**. The music toggle silences the campaign music and keeps sound effects active.
+**Sinal de Umbra** plays on the title screen. The sectors use **Ecos do Depósito**, **Forja Vermelha** and **Núcleo de Vidro**, and **Voz na Serra** scores the ending. The music toggle silences the campaign music and keeps sound effects active.
 
 ## Español
 
@@ -114,6 +116,7 @@ Tu misión es recuperar el puesto. Abre los portones, elimina a todos los enemig
 - **Tres dificultades.** Fácil tiene 8–10 enemigos por sector y deja más tiempo entre ataques. Normal es la selección inicial y tiene 11–13. Difícil tiene 14–16, con persecución más rápida y mayor alcance de detección.
 - **Dos armas.** La pistola gasta una carga y alcanza objetivos distantes. El arma de pulso gasta dos cargas y causa dos puntos de daño a corta distancia. Las cajas amarillas dan ocho cargas, los corazones restauran hasta dos puntos de vida y los brutos morados resisten más disparos.
 - **Objetivos.** Busca las llaves, abre los portones y elimina a todos los enemigos antes de salir. **MATE TODOS** indica que aún quedan enemigos. Una nueva campaña vuelve a sortear los mapas y las posiciones. Reintentar restaura la vida y la munición y conserva la distribución del sector.
+- **Final.** Al recuperar el último sector, el puesto vuelve a transmitir. En la sala de radio, el puesto y la central intercambian mensajes, uno a la vez, con **Voz na Serra**. Después vienen los créditos. Espacio salta la conversación y, en los créditos, vuelve al título.
 
 ### Cómo jugar
 
@@ -138,7 +141,7 @@ Carga `posto-umbra.rom` en tu MSX1 o en un emulador. [Abrir WebMSX en modo MSX1 
 
 La brújula sigue la mira y el minimapa indica el terreno cercano y tu posición. Desde el mapa de pausa, pulsa derecha para ver **Legenda** y otra vez para abrir **Comandos**. El mapa de pausa también muestra enemigos, llaves, suministros, portones y la salida.
 
-**Sinal de Umbra** suena en la pantalla de título. Los sectores tienen tres temas originales, **Ecos do Depósito**, **Forja Vermelha** y **Núcleo de Vidro**. El control de música silencia la banda sonora de la campaña y deja activos los efectos.
+**Sinal de Umbra** suena en la pantalla de título. Los sectores tienen tres temas originales, **Ecos do Depósito**, **Forja Vermelha** y **Núcleo de Vidro**, y **Voz na Serra** acompaña el final. El control de música silencia la banda sonora de la campaña y deja activos los efectos.
 
 ## Capturas de tela · Screenshots · Capturas de pantalla
 
