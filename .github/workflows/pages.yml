@@ -1,0 +1,53 @@
+name: Publicar hotsite
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'tools/build_site.py'
+      - 'docs/packaging/**'
+      - 'docs/screenshots/**'
+      - '.github/workflows/pages.yml'
+  release:
+    types: [published, edited, unpublished, deleted]
+  workflow_dispatch:
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: main
+      - name: Baixar a ROM da release estável mais recente
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          tag="$(gh release view --json tagName --jq .tagName)"
+          gh release download "$tag" --pattern posto-umbra.rom --dir build/pages-release
+          python3 tools/build_site.py --rom build/pages-release/posto-umbra.rom --release "$tag"
+      - uses: actions/upload-pages-artifact@v5.0.0
+        with:
+          path: build/site
+
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5.0.1

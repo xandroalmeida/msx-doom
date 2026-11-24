@@ -34,6 +34,19 @@ Carregue a ROM no WebMSX com 64 KiB de RAM ou abra no openMSX com o C-BIOS. [Web
 openmsx -machine C-BIOS_MSX1 -cart build/posto-umbra.rom
 ```
 
+## Hotsite e releases
+
+O hotsite fica em `site/`. Depois de compilar a ROM, use estes comandos na raiz para abrir uma prévia local.
+
+```sh
+python tools/build_site.py
+python -m http.server 8765 --directory build/site
+```
+
+O fluxo do GitHub Pages busca a release estável mais recente, empacota seu arquivo `posto-umbra.rom` e publica o site. O emulador e o download usam a mesma ROM. O site informa a versão e usa o hash do binário no endereço para distinguir versões no cache. [Hotsite](https://xandroalmeida.github.io/msx-doom/) · [Fluxo do GitHub Pages](../.github/workflows/pages.yml)
+
+Para lançar uma versão, use uma tag com prefixo `v`, compile a ROM do commit marcado e anexe `build/posto-umbra.rom` com esse nome exato à release estável antes de publicá-la. O ambiente `github-pages` permite implantar a partir de `main` e das tags `v*`. A publicação dispara a atualização do hotsite. [Releases](https://github.com/xandroalmeida/msx-doom/releases)
+
 ## Rodar os testes
 
 Compile a ROM primeiro. A suíte usa Node.js 20 e o núcleo WebMSX 6.0.8 C-BIOS. O teste confere o SHA-256 do núcleo antes de executar.

@@ -10,6 +10,7 @@ Posto Umbra é um jogo original para MSX1 com 64 KiB de RAM. A ROM atual é um c
 - Use [docs/TECNICO.md](docs/TECNICO.md) para compilação, emuladores, testes e referências de implementação. Registre orçamento e resultados medidos em [PLAN.md](PLAN.md).
 - Use [src/](src/) para rotinas do cartucho, [tools/](tools/) para os dados e seus geradores e [tests/webmsx.cjs](tests/webmsx.cjs) para regressões em emulador.
 - Edite `tools/levels.py` e `tools/additional_sectors.py` para alterar os mapas. As artes da embalagem ficam em [docs/packaging/](docs/packaging/) e as capturas do jogo em [docs/screenshots/](docs/screenshots/).
+- O hotsite fica em [site/](site/) e usa a ROM da release estável mais recente. Ao publicar um lançamento, anexe a ROM com o nome `posto-umbra.rom` para que o [fluxo do GitHub Pages](.github/workflows/pages.yml) atualize o emulador e o download.
 
 ## Cuidados com mudanças
 

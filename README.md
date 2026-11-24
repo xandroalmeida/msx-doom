@@ -1,5 +1,7 @@
 # Posto Umbra
 
+[Jogar no navegador · Play in your browser · Jugar en el navegador](https://xandroalmeida.github.io/msx-doom/) · [Releases](https://github.com/xandroalmeida/msx-doom/releases/latest)
+
 [Português](#português) · [English](#english) · [Español](#español) · [Guia técnico](docs/TECNICO.md)
 
 | Capa da caixa · Box cover · Portada | Rótulo do cartucho · Cartridge label · Etiqueta |

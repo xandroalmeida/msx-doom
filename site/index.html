@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#110f23">
+  <meta name="description" content="Recupere um bunker isolado em Posto Umbra, um jogo original para MSX1. Jogue no navegador ou baixe a ROM.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Posto Umbra • Jogue MSX no navegador">
+  <meta property="og:description" content="A última transmissão veio do alto da serra. Recupere o posto, setor por setor.">
+  <meta property="og:image" content="https://xandroalmeida.github.io/msx-doom/assets/capa.webp">
+  <meta property="og:url" content="https://xandroalmeida.github.io/msx-doom/">
+  <link rel="canonical" href="https://xandroalmeida.github.io/msx-doom/">
+  <link rel="alternate" hreflang="pt-BR" href="https://xandroalmeida.github.io/msx-doom/?lang=pt">
+  <link rel="alternate" hreflang="en" href="https://xandroalmeida.github.io/msx-doom/?lang=en">
+  <link rel="alternate" hreflang="es" href="https://xandroalmeida.github.io/msx-doom/?lang=es">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+  <script src="locales.js" defer></script>
+  <script src="main.js" defer></script>
+  <title>Posto Umbra • Jogue MSX no navegador</title>
+</head>
+<body id="topo">
+  <a class="skip-link" href="#main" data-copy="skip">Pular para o conteúdo</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="wordmark" href="#topo"><span class="signal-mark" aria-hidden="true"></span>POSTO UMBRA</a>
+      <nav class="site-nav" aria-label="Seções" data-label="navigation">
+        <a href="#jogar" data-copy="navPlay">Jogar</a>
+        <a href="#historia" data-copy="navStory">História</a>
+        <a href="#cartucho" data-copy="navCart">Cartucho</a>
+      </nav>
+      <div class="language-select" role="group" aria-label="Idioma" data-label="language">
+        <button type="button" data-language="pt" lang="pt-BR" aria-pressed="true" aria-label="Português">PT</button>
+        <button type="button" data-language="en" lang="en" aria-pressed="false" aria-label="English">EN</button>
+        <button type="button" data-language="es" lang="es" aria-pressed="false" aria-label="Español">ES</button>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero shell" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="heroEyebrow">Ação em primeira pessoa para MSX1</span></p>
+        <h1 id="hero-title"><span data-copy="heroTitle">O último sinal</span><em data-copy="heroAccent">veio de Umbra.</em></h1>
+        <p class="hero-description" data-copy="heroBody">No alto da serra, uma antena insiste em piscar. Entre no bunker e recupere o posto, setor por setor.</p>
+        <div class="action-row">
+          <a class="button primary" href="#jogar" data-start><span class="play-icon" aria-hidden="true"></span><span data-copy="playNow">Jogar agora</span></a>
+          <a class="button secondary" href="posto-umbra.rom" download data-copy="download">Baixar ROM</a>
+        </div>
+        <p class="hero-platform" data-copy="platform">MSX1 · 64 KiB de RAM · Cartucho de 32 KiB</p>
+      </div>
+      <figure class="hero-cover">
+        <img src="assets/capa.webp" width="800" height="1200" fetchpriority="high" alt="Capa do Posto Umbra. Um explorador diante de um bunker iluminado sob um sol vermelho." data-alt="coverAlt">
+      </figure>
+    </section>
+
+    <section class="campaign-strip" aria-label="A campanha em números" data-label="stats">
+      <dl class="shell campaign-numbers">
+        <div><dt data-copy="statStages">Fases por campanha</dt><dd>12</dd></div>
+        <div><dt data-copy="statMaps">Mapas no sorteio</dt><dd>21</dd></div>
+        <div><dt data-copy="statLevels">Níveis de dificuldade</dt><dd>3</dd></div>
+      </dl>
+    </section>
+
+    <section class="play-section shell section" id="jogar" aria-labelledby="play-title">
+      <div class="section-heading">
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="playEyebrow">MSX no navegador</span></p>
+        <h2 id="play-title" data-copy="playTitle">Entre no posto.</h2>
+        <p data-copy="playIntro">O jogo roda aqui mesmo, com a ROM carregada no WebMSX.</p>
+      </div>
+      <div class="play-layout">
+        <div class="console">
+          <div class="console-header"><span class="console-led" aria-hidden="true"></span><span>POSTO UMBRA</span><span id="release-version">MSX1</span></div>
+          <div class="console-screen" id="console-screen">
+            <div class="console-poster" id="console-poster">
+              <img src="assets/title.png" width="544" height="416" loading="lazy" alt="" aria-hidden="true">
+              <button type="button" class="button primary" data-start><span class="play-icon" aria-hidden="true"></span><span data-copy="launch">Iniciar emulador</span></button>
+            </div>
+          </div>
+          <div class="console-footer">
+            <span data-copy="emulatorCredit">Emulação com WebMSX</span>
+            <a id="external-player" href="https://webmsx.org/cbios/" target="_blank" rel="noopener" data-copy="external">Abrir em outra aba</a>
+          </div>
+          <noscript><p class="console-note">Ative o JavaScript para jogar no navegador. A ROM também está disponível para download.</p></noscript>
+        </div>
+        <aside class="play-guide" aria-labelledby="controls-title">
+          <h3 id="controls-title" data-copy="controlsTitle">Comandos rápidos</h3>
+          <p class="keyboard-hint" data-copy="startHint">Clique na tela do jogo para ativar os controles e pressione Espaço.</p>
+          <p class="touch-hint" data-copy="touchHint">Use as setas na tela e toque em A para começar. Na horizontal, há mais espaço para jogar.</p>
+          <dl class="key-list">
+            <div><dt data-copy="keyMove">Mover e girar</dt><dd><kbd aria-label="Setas" data-label="arrows">↑ ↓ ← →</kbd></dd></div>
+            <div><dt data-copy="keyFire">Atirar</dt><dd><kbd data-copy="keySpace">Espaço</kbd></dd></div>
+            <div><dt data-copy="keyDoor">Abrir portão</dt><dd><kbd>Shift</kbd></dd></div>
+            <div><dt data-copy="keyPause">Mapa e comandos</dt><dd><kbd>M</kbd></dd></div>
+          </dl>
+          <p class="guide-note" data-copy="gameLanguage">O jogo tem textos em português.</p>
+        </aside>
+      </div>
+    </section>
+
+    <section class="story-band" id="historia" aria-labelledby="story-title">
+      <div class="shell section story-layout">
+        <div class="story-copy">
+          <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="storyEyebrow">O sinal de Umbra</span></p>
+          <h2 id="story-title" data-copy="storyTitle">As luzes ainda estão acesas.</h2>
+          <p data-copy="storyBody">A última transmissão chegou ao anoitecer. O rádio ficou mudo, mas a luz vermelha no alto da serra piscou a noite inteira. Quando você cruza a entrada, encontra alas fechadas e criaturas nos corredores.</p>
+          <p class="story-end" data-copy="storyEnd">Recolha as chaves, abra os portões e elimine os inimigos antes de seguir até a saída. Do outro lado da serra, a central espera seu sinal.</p>
+        </div>
+        <figure class="game-frame">
+          <img src="assets/gameplay.png" width="544" height="416" loading="lazy" alt="Corredor do Posto Umbra em primeira pessoa, com um inimigo e o minimapa." data-alt="gameplayAlt">
+          <figcaption data-copy="gameplayCaption">Captura do jogo · Depósito</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="packaging shell section" id="cartucho" aria-labelledby="cart-title">
+      <div>
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="cartEyebrow">Arte da embalagem</span></p>
+        <h2 id="cart-title" data-copy="cartTitle">Pronto para o cartucho.</h2>
+        <p data-copy="cartBody">O bunker, o sol vermelho e a antena da abertura ganharam uma capa e um rótulo inspirados nas embalagens de MSX dos anos 80.</p>
+        <div class="action-row">
+          <a class="button secondary" href="art/capa-posto-umbra.png" data-copy="viewCover">Ver capa</a>
+          <a class="button secondary" href="art/rotulo-posto-umbra.png" data-copy="viewLabel">Ver rótulo</a>
+        </div>
+      </div>
+      <img src="assets/rotulo.webp" width="840" height="560" alt="Rótulo do cartucho, com o bunker iluminado e a marca Posto Umbra." data-alt="labelAlt">
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <a class="wordmark" href="#topo"><span class="signal-mark" aria-hidden="true"></span>POSTO UMBRA</a>
+      <div class="footer-links">
+        <a href="https://github.com/xandroalmeida/msx-doom" data-copy="repo">Projeto no GitHub</a>
+        <a href="posto-umbra.rom" download data-copy="download">Baixar ROM</a>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>
