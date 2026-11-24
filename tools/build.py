@@ -20,19 +20,28 @@ ROM_SIZE = 32 * 1024
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--assembler", default="pyz80", help="pyz80 executable or .py path")
+    parser.add_argument("--final", action="store_true",
+                        help="gera build/posto-umbra-final.rom, em que Espaço no título abre a tela final")
     args = parser.parse_args()
 
     output = ROOT / "build"
     output.mkdir(exist_ok=True)
-    source = output / "posto-umbra.generated.z80"
+    name = "posto-umbra-final" if args.final else "posto-umbra"
+    source = output / f"{name}.generated.z80"
     modules = ("posto-umbra.z80", "combat.z80", "objects.z80", "menu.z80", "campaign.z80", "opening.z80")
     assembly = "\n".join((ROOT / "src" / module).read_text() for module in modules)
+    if args.final:
+        # Development shortcut: starting a campaign jumps straight to the ending.
+        start = "begin_campaign:\n    call intro_stop\n"
+        if assembly.count(start) != 1:
+            raise ValueError("Não encontrei o início da campanha para o atalho do final.")
+        assembly = assembly.replace(start, start + "    ld a,3\n    ld (outcome),a\n    jp ending_start\n")
     late_modules = ("compass.z80", "mission.z80", "ending.z80")
     late_assembly = "\n".join((ROOT / "src" / module).read_text() for module in late_modules)
     music = (ROOT / "src" / "music.z80").read_text()
     source.write_text("\n".join((assembly, generate(), late_assembly, score_data(), ending_data(), title_data(data, FONT),
                                  music, gameplay_score(), sector_data(data), "rom_end:\n")))
-    binary = output / "posto-umbra.bin"
+    binary = output / f"{name}.bin"
     assembler = [args.assembler]
     if args.assembler.endswith(".py"):
         assembler.insert(0, sys.executable)
@@ -41,7 +50,7 @@ def main():
         subprocess.run(
             assembler + [
                 f"--obj={binary}",
-                f"--mapfile={output / 'posto-umbra.sym'}",
+                f"--mapfile={output / f'{name}.sym'}",
                 str(source),
             ],
             cwd=output,
@@ -56,7 +65,7 @@ def main():
         raise ValueError("Cabeçalho de cartucho MSX inválido.")
     if len(code) > ROM_SIZE:
         raise ValueError(f"O binário de {len(code)} bytes excede o cartucho de 32 KiB.")
-    rom = output / "posto-umbra.rom"
+    rom = output / f"{name}.rom"
     rom.write_bytes(code.ljust(ROM_SIZE, b"\xff"))
     print(f"{rom.relative_to(ROOT)}: {len(code)} / {ROM_SIZE} bytes usados")
 
