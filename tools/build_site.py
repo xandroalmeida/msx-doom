@@ -23,7 +23,7 @@ def main():
 
     shutil.copytree(SITE, OUTPUT, dirs_exist_ok=True)
     assets = OUTPUT / "assets"
-    for name in ("title.png", "gameplay.png"):
+    for name in ("title.png", "gameplay.png", "map.png", "legend.png"):
         shutil.copy2(ROOT / "docs" / "screenshots" / name, assets / name)
     shutil.copytree(ROOT / "docs" / "packaging", OUTPUT / "art", dirs_exist_ok=True)
     (OUTPUT / "posto-umbra.rom").write_bytes(rom)

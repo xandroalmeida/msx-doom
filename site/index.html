@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#110f23">
-  <meta name="description" content="Recupere um bunker isolado em Posto Umbra, um jogo original para MSX1. Jogue no navegador ou baixe a ROM.">
+  <meta name="description" content="Posto Umbra, cartucho de ação em primeira pessoa para MSX 1. Doze setores, portões trancados e criaturas nos corredores. Jogue no navegador ou baixe a ROM.">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="Posto Umbra • Jogue MSX no navegador">
-  <meta property="og:description" content="A última transmissão veio do alto da serra. Recupere o posto, setor por setor.">
+  <meta property="og:title" content="Posto Umbra • Lançamento para MSX 1">
+  <meta property="og:description" content="A última transmissão veio do alto da serra. Encaixe o cartucho e recupere o posto, setor por setor.">
   <meta property="og:image" content="https://xandroalmeida.github.io/msx-doom/assets/capa.webp">
   <meta property="og:url" content="https://xandroalmeida.github.io/msx-doom/">
   <link rel="canonical" href="https://xandroalmeida.github.io/msx-doom/">
@@ -16,20 +16,28 @@
   <link rel="alternate" hreflang="es" href="https://xandroalmeida.github.io/msx-doom/?lang=es">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,600;0,700;0,800;1,800&family=DM+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&family=Press+Start+2P&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
   <script src="locales.js" defer></script>
   <script src="main.js" defer></script>
-  <title>Posto Umbra • Jogue MSX no navegador</title>
+  <title>Posto Umbra • Lançamento para MSX 1</title>
 </head>
 <body id="topo">
   <a class="skip-link" href="#main" data-copy="skip">Pular para o conteúdo</a>
+  <div class="masthead">
+    <div class="shell masthead-inner">
+      <span data-copy="mastLeft">Novidades em software · Edição de 1986</span>
+      <span data-copy="mastRight">Exclusivo para MSX 1</span>
+    </div>
+  </div>
   <header class="site-header">
     <div class="shell header-inner">
       <a class="wordmark" href="#topo"><span class="signal-mark" aria-hidden="true"></span>POSTO UMBRA</a>
       <nav class="site-nav" aria-label="Seções" data-label="navigation">
         <a href="#jogar" data-copy="navPlay">Jogar</a>
         <a href="#historia" data-copy="navStory">História</a>
+        <a href="#jogo" data-copy="navGame">O jogo</a>
+        <a href="#manual" data-copy="navManual">Manual</a>
         <a href="#cartucho" data-copy="navCart">Cartucho</a>
       </nav>
       <div class="language-select" role="group" aria-label="Idioma" data-label="language">
@@ -39,37 +47,41 @@
       </div>
     </div>
   </header>
+  <div class="color-bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
 
   <main id="main">
     <section class="hero shell" aria-labelledby="hero-title">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="heroEyebrow">Ação em primeira pessoa para MSX1</span></p>
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="heroEyebrow">Cartucho para MSX 1 · Ação em primeira pessoa</span></p>
         <h1 id="hero-title"><span data-copy="heroTitle">O último sinal</span><em data-copy="heroAccent">veio de Umbra.</em></h1>
-        <p class="hero-description" data-copy="heroBody">No alto da serra, uma antena insiste em piscar. Entre no bunker e recupere o posto, setor por setor.</p>
+        <p class="hero-description" data-copy="heroBody">Uma antena pisca no alto da serra e o rádio do posto está mudo há um dia. Encaixe o cartucho, ligue o micro e desça ao bunker. Doze setores, portões trancados e criaturas nos corredores esperam por você.</p>
         <div class="action-row">
           <a class="button primary" href="#jogar" data-start><span class="play-icon" aria-hidden="true"></span><span data-copy="playNow">Jogar agora</span></a>
           <a class="button secondary" href="posto-umbra.rom" download data-copy="download">Baixar ROM</a>
         </div>
-        <p class="hero-platform" data-copy="platform">MSX1 · 64 KiB de RAM · Cartucho de 32 KiB</p>
+        <p class="hero-platform" data-copy="platform">MSX 1 · 64 KiB de RAM · Cartucho de 32 KiB · Teclado ou joystick</p>
       </div>
       <figure class="hero-cover">
+        <span class="burst" aria-hidden="true"><span data-copy="burst">Lançamento!</span></span>
         <img src="assets/capa.webp" width="800" height="1200" fetchpriority="high" alt="Capa do Posto Umbra. Um explorador diante de um bunker iluminado sob um sol vermelho." data-alt="coverAlt">
       </figure>
     </section>
 
-    <section class="campaign-strip" aria-label="A campanha em números" data-label="stats">
+    <section class="campaign-strip" aria-label="O cartucho em números" data-label="stats">
       <dl class="shell campaign-numbers">
-        <div><dt data-copy="statStages">Fases por campanha</dt><dd>12</dd></div>
+        <div><dt data-copy="statStages">Setores por campanha</dt><dd>12</dd></div>
         <div><dt data-copy="statMaps">Mapas no sorteio</dt><dd>21</dd></div>
-        <div><dt data-copy="statLevels">Níveis de dificuldade</dt><dd>3</dd></div>
+        <div><dt data-copy="statLevels">Dificuldades</dt><dd>3</dd></div>
+        <div><dt data-copy="statWeapons">Armas</dt><dd>2</dd></div>
+        <div><dt data-copy="statSongs">Músicas originais</dt><dd>4</dd></div>
       </dl>
     </section>
 
     <section class="play-section shell section" id="jogar" aria-labelledby="play-title">
       <div class="section-heading">
-        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="playEyebrow">MSX no navegador</span></p>
-        <h2 id="play-title" data-copy="playTitle">Entre no posto.</h2>
-        <p data-copy="playIntro">O jogo roda aqui mesmo, com a ROM carregada no WebMSX.</p>
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="playEyebrow">Demonstração na vitrine</span></p>
+        <h2 id="play-title" data-copy="playTitle">Experimente agora.</h2>
+        <p data-copy="playIntro">Como na loja de informática, o micro já está ligado e o cartucho está encaixado. O WebMSX roda a ROM aqui mesmo, sem instalar nada.</p>
       </div>
       <div class="play-layout">
         <div class="console">
@@ -77,7 +89,7 @@
           <div class="console-screen" id="console-screen">
             <div class="console-poster" id="console-poster">
               <img src="assets/title.png" width="544" height="416" loading="lazy" alt="" aria-hidden="true">
-              <button type="button" class="button primary" data-start><span class="play-icon" aria-hidden="true"></span><span data-copy="launch">Iniciar emulador</span></button>
+              <button type="button" class="button primary" data-start><span class="play-icon" aria-hidden="true"></span><span data-copy="launch">Ligar o micro</span></button>
             </div>
           </div>
           <div class="console-footer">
@@ -88,15 +100,17 @@
         </div>
         <aside class="play-guide" aria-labelledby="controls-title">
           <h3 id="controls-title" data-copy="controlsTitle">Comandos rápidos</h3>
-          <p class="keyboard-hint" data-copy="startHint">Clique na tela do jogo para ativar os controles e pressione Espaço.</p>
-          <p class="touch-hint" data-copy="touchHint">Use as setas na tela e toque em A para começar. Na horizontal, há mais espaço para jogar.</p>
+          <p class="keyboard-hint" data-copy="startHint">Clique na tela do jogo para ativar o teclado. Escolha a dificuldade com ← e → e pressione Espaço.</p>
+          <p class="touch-hint" data-copy="touchHint">Use as setas na tela e toque em A para começar. Na horizontal, sobra mais espaço para jogar.</p>
           <dl class="key-list">
-            <div><dt data-copy="keyMove">Mover e girar</dt><dd><kbd aria-label="Setas" data-label="arrows">↑ ↓ ← →</kbd></dd></div>
+            <div><dt data-copy="keyMove">Andar e girar</dt><dd><kbd aria-label="Setas" data-label="arrows">↑ ↓ ← →</kbd></dd></div>
             <div><dt data-copy="keyFire">Atirar</dt><dd><kbd data-copy="keySpace">Espaço</kbd></dd></div>
+            <div><dt data-copy="keyWeapon">Trocar de arma</dt><dd><kbd>X</kbd></dd></div>
             <div><dt data-copy="keyDoor">Abrir portão</dt><dd><kbd>Shift</kbd></dd></div>
-            <div><dt data-copy="keyPause">Mapa e comandos</dt><dd><kbd>M</kbd></dd></div>
+            <div><dt data-copy="keyPause">Mapa e pausa</dt><dd><kbd>M</kbd></dd></div>
           </dl>
-          <p class="guide-note" data-copy="gameLanguage">O jogo tem textos em português.</p>
+          <p class="guide-note"><a href="#manual" data-copy="guideMore">Todos os comandos no manual</a></p>
+          <p class="guide-note" data-copy="gameLanguage">Os textos do jogo estão em português.</p>
         </aside>
       </div>
     </section>
@@ -104,35 +118,179 @@
     <section class="story-band" id="historia" aria-labelledby="story-title">
       <div class="shell section story-layout">
         <div class="story-copy">
-          <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="storyEyebrow">O sinal de Umbra</span></p>
+          <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="storyEyebrow">A história</span></p>
           <h2 id="story-title" data-copy="storyTitle">As luzes ainda estão acesas.</h2>
-          <p data-copy="storyBody">A última transmissão chegou ao anoitecer. O rádio ficou mudo, mas a luz vermelha no alto da serra piscou a noite inteira. Quando você cruza a entrada, encontra alas fechadas e criaturas nos corredores.</p>
-          <p class="story-end" data-copy="storyEnd">Recolha as chaves, abra os portões e elimine os inimigos antes de seguir até a saída. Do outro lado da serra, a central espera seu sinal.</p>
+          <p data-copy="storyBody1">A última transmissão chegou ao anoitecer. A central ouviu o identificador do posto, três bipes e uma voz entrecortada pelo ruído. Depois, silêncio. No alto da serra, o farol vermelho da antena piscou a noite inteira.</p>
+          <blockquote class="radio-quote">
+            <p data-copy="storyQuote">“Os portões fecharam. As luzes ainda estão acesas.”</p>
+            <footer data-copy="storyQuoteSource">Última mensagem do Posto Umbra</footer>
+          </blockquote>
+          <p data-copy="storyBody2">Você chega no fim do dia seguinte. Há energia na entrada, caixas de suprimentos no chão e criaturas entre a doca e as alas internas. Os depósitos, a fundição e o reator ainda se ligam pelos corredores de serviço. As chaves ficaram do lado de dentro.</p>
+          <p class="story-end" data-copy="storyEnd">Sua missão é recuperar o posto. Do outro lado da serra, a central espera ouvir a antena de novo. Desta vez, a voz será sua.</p>
         </div>
-        <figure class="game-frame">
+        <figure class="game-frame crt">
           <img src="assets/gameplay.png" width="544" height="416" loading="lazy" alt="Corredor do Posto Umbra em primeira pessoa, com um inimigo e o minimapa." data-alt="gameplayAlt">
-          <figcaption data-copy="gameplayCaption">Captura do jogo · Depósito</figcaption>
+          <figcaption data-copy="gameplayCaption">Tela do jogo · Depósito</figcaption>
         </figure>
+      </div>
+    </section>
+
+    <section class="features shell section" id="jogo" aria-labelledby="game-title">
+      <div class="section-heading">
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="gameEyebrow">O jogo</span></p>
+        <h2 id="game-title" data-copy="gameTitle">Doze setores. Nenhuma partida igual.</h2>
+        <p data-copy="gameIntro">Ação em primeira pessoa com corredores em três dimensões, num MSX 1 de 64 KiB. Cada campanha é sorteada na hora em que você aperta Espaço.</p>
+      </div>
+      <ol class="feature-grid">
+        <li>
+          <h3 data-copy="f1Title">Campanha sorteada</h3>
+          <p data-copy="f1Body">São 12 setores por partida, três de cada faixa de complexidade, entre 21 mapas. Você começa em salas amplas com dois portões e termina em labirintos longos com quatro.</p>
+        </li>
+        <li>
+          <h3 data-copy="f2Title">Três dificuldades</h3>
+          <p data-copy="f2Body">No Fácil, cada setor tem de 8 a 10 inimigos. No Normal, de 11 a 13. No Difícil, de 14 a 16, e as criaturas enxergam mais longe e perseguem mais rápido.</p>
+        </li>
+        <li>
+          <h3 data-copy="f3Title">Duas armas</h3>
+          <p data-copy="f3Body">A pistola gasta uma carga e acerta de longe. A arma de pulso gasta duas e causa dano dobrado de perto. Saber a hora de trocar faz a munição render.</p>
+        </li>
+        <li>
+          <h3 data-copy="f4Title">Missão completa</h3>
+          <p data-copy="f4Body">Recolha as chaves, abra os portões e elimine todos os inimigos antes de sair. Se alguém ficar para trás, o painel avisa: MATE TODOS.</p>
+        </li>
+        <li>
+          <h3 data-copy="f5Title">Bússola e mapa</h3>
+          <p data-copy="f5Body">A bússola segue a mira e o minimapa mostra o terreno ao redor. Na pausa, o mapa do setor revela inimigos, chaves, suprimentos, portões e a saída.</p>
+        </li>
+        <li>
+          <h3 data-copy="f6Title">Trilha original</h3>
+          <p data-copy="f6Body">Quatro músicas feitas para o chip de som do MSX. Sinal de Umbra toca na abertura. Ecos do Depósito, Forja Vermelha e Núcleo de Vidro acompanham os setores.</p>
+        </li>
+      </ol>
+
+      <h3 class="gallery-title" data-copy="galleryTitle">Telas do jogo</h3>
+      <div class="gallery">
+        <figure class="crt">
+          <img src="assets/title.png" width="544" height="416" loading="lazy" alt="Tela de abertura com o bunker e o seletor de dificuldade." data-alt="shotTitleAlt">
+          <figcaption data-copy="shotTitle">Abertura · escolha da dificuldade</figcaption>
+        </figure>
+        <figure class="crt">
+          <img src="assets/gameplay.png" width="544" height="416" loading="lazy" alt="Visão em primeira pessoa do Depósito, com um inimigo e o minimapa." data-alt="shotGameAlt">
+          <figcaption data-copy="shotGame">Em jogo · Depósito</figcaption>
+        </figure>
+        <figure class="crt">
+          <img src="assets/map.png" width="544" height="416" loading="lazy" alt="Mapa de pausa com portões, suprimentos, inimigos e a posição do jogador." data-alt="shotMapAlt">
+          <figcaption data-copy="shotMap">Pausa · mapa do setor</figcaption>
+        </figure>
+        <figure class="crt">
+          <img src="assets/legend.png" width="544" height="416" loading="lazy" alt="Legenda do mapa com os símbolos do terreno e dos objetos." data-alt="shotLegendAlt">
+          <figcaption data-copy="shotLegend">Pausa · legenda</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="manual-band" id="manual" aria-labelledby="manual-title">
+      <div class="shell section">
+        <div class="section-heading">
+          <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="manualEyebrow">Manual de instruções</span></p>
+          <h2 id="manual-title" data-copy="manualTitle">Antes de descer ao bunker.</h2>
+          <p data-copy="manualIntro">Encaixe o cartucho com o micro desligado e só então ligue. Para jogar com joystick, use a porta 1. O jogo funciona em aparelhos de 50 e de 60 Hz.</p>
+        </div>
+        <div class="manual-layout">
+          <div class="manual-page">
+            <h3 data-copy="tableTitle">Comandos</h3>
+            <div class="table-wrap">
+              <table class="controls-table">
+                <thead>
+                  <tr><th scope="col" data-copy="colAction">Ação</th><th scope="col" data-copy="colKeyboard">Teclado</th><th scope="col" data-copy="colJoystick">Joystick</th></tr>
+                </thead>
+                <tbody>
+                  <tr><th scope="row" data-copy="cStart">Começar ou avançar</th><td><kbd data-copy="keySpace">Espaço</kbd></td><td><kbd>A</kbd></td></tr>
+                  <tr><th scope="row" data-copy="cDifficulty">Escolher a dificuldade</th><td><kbd>←</kbd> <kbd>→</kbd></td><td data-copy="jLeftRight">Esquerda / direita</td></tr>
+                  <tr><th scope="row" data-copy="cWalk">Avançar ou recuar</th><td><kbd>↑</kbd> <kbd>↓</kbd></td><td data-copy="jUpDown">Cima / baixo</td></tr>
+                  <tr><th scope="row" data-copy="cTurn">Girar</th><td><kbd>←</kbd> <kbd>→</kbd></td><td data-copy="jLeftRight">Esquerda / direita</td></tr>
+                  <tr><th scope="row" data-copy="cStrafe">Andar e girar juntos</th><td data-copy="kTwoArrows">Duas setas</td><td data-copy="jDiagonal">Diagonal</td></tr>
+                  <tr><th scope="row" data-copy="cFire">Atirar (segure para repetir)</th><td><kbd data-copy="keySpace">Espaço</kbd></td><td><kbd>A</kbd></td></tr>
+                  <tr><th scope="row" data-copy="cWeapon">Trocar de arma</th><td><kbd>X</kbd></td><td><kbd>B</kbd> + <span data-copy="jUp">cima</span></td></tr>
+                  <tr><th scope="row" data-copy="cGate">Abrir portão</th><td><kbd data-copy="keyShift">Shift</kbd></td><td><kbd>B</kbd></td></tr>
+                  <tr><th scope="row" data-copy="cPause">Pausar ou retomar</th><td><kbd>M</kbd></td><td><kbd>A</kbd> + <kbd>B</kbd></td></tr>
+                  <tr><th scope="row" data-copy="cMinimap">Ligar ou desligar o minimapa</th><td><kbd>N</kbd></td><td><kbd>B</kbd> + <span data-copy="jDown">baixo</span></td></tr>
+                  <tr><th scope="row" data-copy="cMusic">Ligar ou desligar a música</th><td><kbd>T</kbd></td><td><kbd>B</kbd> + <span data-copy="jRight">direita</span></td></tr>
+                  <tr><th scope="row" data-copy="cRestart">Reiniciar o setor</th><td><kbd>R</kbd></td><td>—</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <p class="manual-note" data-copy="pauseNote">Na pausa, → abre a aba Legenda e mais um toque abre Comandos. ↑ e ↓ rolam o mapa do setor.</p>
+          </div>
+          <div class="manual-side">
+            <div class="manual-page">
+              <h3 data-copy="itemsTitle">No bunker</h3>
+              <ul class="legend-list">
+                <li><span class="swatch yellow" aria-hidden="true"></span><strong data-copy="iAmmo">Caixa amarela</strong><span data-copy="iAmmoBody">Oito cargas de munição.</span></li>
+                <li><span class="swatch red" aria-hidden="true"></span><strong data-copy="iHeart">Coração</strong><span data-copy="iHeartBody">Recupera até dois pontos de vida.</span></li>
+                <li><span class="swatch cream" aria-hidden="true"></span><strong data-copy="iKey">Chave</strong><span data-copy="iKeyBody">Abre o portão do setor. O último pede a chave final.</span></li>
+                <li><span class="swatch green" aria-hidden="true"></span><strong data-copy="iExit">Saída verde</strong><span data-copy="iExitBody">Leva ao próximo setor, com todos os inimigos abatidos.</span></li>
+                <li><span class="swatch purple" aria-hidden="true"></span><strong data-copy="iBrute">Bruto roxo</strong><span data-copy="iBruteBody">Resiste a mais disparos que as outras criaturas.</span></li>
+              </ul>
+            </div>
+            <div class="manual-page tips">
+              <h3 data-copy="tipsTitle">Dicas</h3>
+              <ul>
+                <li data-copy="tip1">Reiniciar com R repõe vida e munição e mantém inimigos e itens nos mesmos lugares.</li>
+                <li data-copy="tip2">Uma campanha nova sorteia de novo os mapas, os inimigos e os suprimentos.</li>
+                <li data-copy="tip3">A pistola economiza carga. Guarde o pulso para os brutos roxos.</li>
+                <li data-copy="tip4">A tecla T silencia a música e mantém os efeitos sonoros.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
 
     <section class="packaging shell section" id="cartucho" aria-labelledby="cart-title">
       <div>
-        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="cartEyebrow">Arte da embalagem</span></p>
-        <h2 id="cart-title" data-copy="cartTitle">Pronto para o cartucho.</h2>
-        <p data-copy="cartBody">O bunker, o sol vermelho e a antena da abertura ganharam uma capa e um rótulo inspirados nas embalagens de MSX dos anos 80.</p>
+        <p class="eyebrow"><span class="signal-line" aria-hidden="true"></span><span data-copy="cartEyebrow">Na prateleira</span></p>
+        <h2 id="cart-title" data-copy="cartTitle">Caixa, rótulo e cartucho.</h2>
+        <p data-copy="cartBody">O bunker, o sol vermelho e a antena da abertura estão na capa e no rótulo, desenhados como as caixas de MSX que enchiam as prateleiras das lojas.</p>
+        <dl class="spec-sheet" aria-label="Ficha técnica" data-label="specLabel">
+          <div><dt data-copy="sSystem">Sistema</dt><dd>MSX 1</dd></div>
+          <div><dt data-copy="sMemory">Memória</dt><dd data-copy="sMemoryVal">64 KiB de RAM</dd></div>
+          <div><dt data-copy="sMedia">Mídia</dt><dd data-copy="sMediaVal">Cartucho ROM de 32 KiB</dd></div>
+          <div><dt data-copy="sVideo">Vídeo</dt><dd>50 / 60 Hz</dd></div>
+          <div><dt data-copy="sInput">Controles</dt><dd data-copy="sInputVal">Teclado ou joystick</dd></div>
+          <div><dt data-copy="sPlayers">Jogadores</dt><dd>1</dd></div>
+          <div><dt data-copy="sGenre">Gênero</dt><dd data-copy="sGenreVal">Ação em primeira pessoa</dd></div>
+          <div><dt data-copy="sLang">Idioma</dt><dd data-copy="sLangVal">Português</dd></div>
+        </dl>
         <div class="action-row">
           <a class="button secondary" href="art/capa-posto-umbra.png" data-copy="viewCover">Ver capa</a>
           <a class="button secondary" href="art/rotulo-posto-umbra.png" data-copy="viewLabel">Ver rótulo</a>
         </div>
       </div>
-      <img src="assets/rotulo.webp" width="840" height="560" alt="Rótulo do cartucho, com o bunker iluminado e a marca Posto Umbra." data-alt="labelAlt">
+      <img src="assets/rotulo.webp" width="840" height="560" loading="lazy" alt="Rótulo do cartucho, com o bunker iluminado e a marca Posto Umbra." data-alt="labelAlt">
+    </section>
+
+    <section class="shell coupon-section" aria-labelledby="coupon-title">
+      <div class="coupon">
+        <span class="scissors" aria-hidden="true">✂</span>
+        <div>
+          <p class="coupon-tag" data-copy="couponTag">Distribuição livre</p>
+          <h2 id="coupon-title" data-copy="couponTitle">Leve o Posto Umbra para casa.</h2>
+          <p data-copy="couponBody">Grave a ROM num cartucho e jogue num MSX 1 de verdade, com 64 KiB de RAM, ou carregue o arquivo em qualquer emulador.</p>
+        </div>
+        <div class="coupon-actions">
+          <a class="button primary" href="posto-umbra.rom" download data-copy="download">Baixar ROM</a>
+          <a class="button secondary" href="https://github.com/xandroalmeida/msx-doom" data-copy="repo">Projeto no GitHub</a>
+        </div>
+      </div>
     </section>
   </main>
 
   <footer class="site-footer">
+    <div class="color-bars" aria-hidden="true"><span></span><span></span><span></span><span></span></div>
     <div class="shell footer-inner">
       <a class="wordmark" href="#topo"><span class="signal-mark" aria-hidden="true"></span>POSTO UMBRA</a>
+      <p class="footer-note" data-copy="footerNote">Um jogo original para MSX 1, apresentado como nas revistas de 1986.</p>
       <div class="footer-links">
         <a href="https://github.com/xandroalmeida/msx-doom" data-copy="repo">Projeto no GitHub</a>
         <a href="posto-umbra.rom" download data-copy="download">Baixar ROM</a>

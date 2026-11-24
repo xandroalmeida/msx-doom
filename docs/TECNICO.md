@@ -43,6 +43,8 @@ python tools/build_site.py
 python -m http.server 8765 --directory build/site
 ```
 
+O atalho `make serve` faz os dois passos, compila a ROM se ela faltar e serve o site em `http://localhost:8765/` até o Ctrl+C. Use `PORT=9000` para trocar a porta.
+
 O fluxo do GitHub Pages busca a release estável mais recente, empacota seu arquivo `posto-umbra.rom` e publica o site. O emulador e o download usam a mesma ROM. O site informa a versão e usa o hash do binário no endereço para distinguir versões no cache. [Hotsite](https://xandroalmeida.github.io/msx-doom/) · [Fluxo do GitHub Pages](../.github/workflows/pages.yml)
 
 Para lançar uma versão, use uma tag com prefixo `v`, compile a ROM do commit marcado e anexe `build/posto-umbra.rom` com esse nome exato à release estável antes de publicá-la. O ambiente `github-pages` permite implantar a partir de `main` e das tags `v*`. A publicação dispara a atualização do hotsite. [Releases](https://github.com/xandroalmeida/msx-doom/releases)
