@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#110f23">
   <meta name="description" content="Posto Umbra, cartucho de ação em primeira pessoa para MSX 1. Doze setores, portões trancados e criaturas nos corredores. Jogue no navegador ou baixe a ROM.">
   <meta property="og:type" content="website">
@@ -87,6 +87,10 @@
         <div class="console">
           <div class="console-header"><span class="console-led" aria-hidden="true"></span><span>POSTO UMBRA</span><span id="release-version">MSX1</span></div>
           <div class="console-screen" id="console-screen">
+            <div class="immersive-bar">
+              <button type="button" class="immersive-exit" id="immersive-exit"><span aria-hidden="true">✕</span> <span data-copy="exitGame">Sair do jogo</span></button>
+              <span class="immersive-hint" data-copy="rotateHint">Gire o aparelho para uma tela maior.</span>
+            </div>
             <div class="console-poster" id="console-poster">
               <img src="assets/title.png" width="544" height="416" loading="lazy" alt="" aria-hidden="true">
               <button type="button" class="button primary" data-start><span class="play-icon" aria-hidden="true"></span><span data-copy="launch">Ligar o micro</span></button>
@@ -101,7 +105,7 @@
         <aside class="play-guide" aria-labelledby="controls-title">
           <h3 id="controls-title" data-copy="controlsTitle">Comandos rápidos</h3>
           <p class="keyboard-hint" data-copy="startHint">Clique na tela do jogo para ativar o teclado. Escolha a dificuldade com ← e → e pressione Espaço.</p>
-          <p class="touch-hint" data-copy="touchHint">Use as setas na tela e toque em A para começar. Na horizontal, sobra mais espaço para jogar.</p>
+          <p class="touch-hint" data-copy="touchHint">Toque em Ligar o micro e o jogo ocupa a tela inteira, com o direcional à esquerda e os botões A e B à direita. Toque em A para começar.</p>
           <dl class="key-list">
             <div><dt data-copy="keyMove">Andar e girar</dt><dd><kbd aria-label="Setas" data-label="arrows">↑ ↓ ← →</kbd></dd></div>
             <div><dt data-copy="keyFire">Atirar</dt><dd><kbd data-copy="keySpace">Espaço</kbd></dd></div>

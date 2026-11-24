@@ -15,9 +15,12 @@ const localized = [
 const consoleScreen = document.querySelector("#console-screen");
 const poster = document.querySelector("#console-poster");
 const launchText = poster.querySelector("[data-copy=launch]");
+launchText.dataset.initial = launchText.textContent;
 const releaseVersion = document.querySelector("#release-version");
 const description = document.querySelector('meta[name="description"]');
 const externalPlayer = document.querySelector("#external-player");
+const exitButton = document.querySelector("#immersive-exit");
+const coarsePointer = matchMedia("(pointer: coarse)");
 let language;
 let frame;
 let starting = false;
@@ -84,9 +87,37 @@ const release = loadRelease().then((metadata) => {
   return metadata;
 });
 
+// No celular, o emulador ocupa a tela inteira para que os controles de toque
+// do WebMSX não disputem espaço com a imagem do jogo.
+function enterImmersive() {
+  consoleScreen.classList.add("immersive");
+  document.documentElement.classList.add("player-open");
+  history.pushState({player: true}, "");
+  consoleScreen.requestFullscreen?.({navigationUI: "hide"}).catch(() => {});
+}
+
+function closeImmersive() {
+  if (!consoleScreen.classList.contains("immersive")) return;
+  consoleScreen.classList.remove("immersive");
+  document.documentElement.classList.remove("player-open");
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  frame?.remove();
+  frame = undefined;
+  poster.querySelector("button").disabled = false;
+  launchText.textContent = siteLocales[language]["launch"] ?? launchText.dataset.initial;
+  poster.hidden = false;
+}
+
+exitButton.addEventListener("click", () => {
+  if (history.state?.player) history.back();
+  else closeImmersive();
+});
+addEventListener("popstate", closeImmersive);
+
 async function startEmulator() {
   if (frame || starting) return;
   starting = true;
+  if (coarsePointer.matches) enterImmersive();
   launchText.textContent = siteLocales[language].loading;
   poster.querySelector("button").disabled = true;
   const current = await loadRelease();
